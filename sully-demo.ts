@@ -1,23 +1,23 @@
+// Import required dependencies
 import * as dotenv from 'dotenv';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 import * as fs from 'fs/promises';
 import { existsSync, statSync } from 'fs';
 
-// Load environment variables
+// Load environment variables from .env file
 dotenv.config();
 
 // API configuration
 //const SULLY_API_URL = 'https://dev01-copilot-api.np.services.sully.ai/api/v2/ext';
 const SULLY_API_URL = 'https://dev01-copilot-chaitanya.np.services.sully.ai/api/v2/ext';
-//const SULLY_API_URL = 'https://371a-66-75-242-172.ngrok-free.app/api/v2/ext';
 const API_KEY = process.env.SULLY_API_KEY!;
 const ACCOUNT_ID = process.env.SULLY_ACCOUNT_ID!;
 
-// Constants
+// Define supported audio file formats
 const SUPPORTED_AUDIO_FORMATS = ['.mp3', '.wav', '.m4a', '.ogg'];
 
-// Type definitions
+// Type definitions for API responses
 interface ApiResponse {
   status: "ok" | "error";
   data: any;
@@ -44,7 +44,33 @@ interface NoteResponse extends ApiResponse {
   };
 }
 
-// Helper function for API requests
+// Logger utility for consistent console output formatting
+const logger = {
+  step: (message: string) => console.log(`\n🚀 ${message}`),
+  info: (message: string) => console.log(`ℹ️  ${message}`),
+  success: (message: string) => console.log(`✅ ${message}`),
+  warning: (message: string) => console.log(`⚠️  ${message}`),
+  error: (message: string) => console.error(`❌ ${message}`),
+  json: (label: string, data: any) => {
+    // Special handling for SOAP note format
+    if (typeof data === 'object' && data.soap) {
+      console.log(`📋 ${label}:`);
+      console.log(JSON.stringify({
+        soap: {
+          subjective: {
+            chiefComplaint: data.soap.subjective?.chiefComplaint || '',
+            hpi: data.soap.subjective?.hpi || {},
+            pmh: data.soap.subjective?.pmh || {}
+          }
+        }
+      }, null, 2));
+    } else {
+      console.log(`📋 ${label}:\n${JSON.stringify(data, null, 2)}`);
+    }
+  }
+};
+
+// Generic API request handler with error handling
 async function makeRequest(endpoint: string, options: any = {}): Promise<any> {
   const url = `${SULLY_API_URL}${endpoint}`;
   const headers: Record<string, string> = {
@@ -77,7 +103,7 @@ async function makeRequest(endpoint: string, options: any = {}): Promise<any> {
   }
 }
 
-// API Functions
+// Create a new note style template with sample format
 async function createNoteStyle(sampleNote: string, instructions: string[] = []): Promise<any> {
   return makeRequest('/note-styles', {
     method: 'POST',
@@ -85,13 +111,14 @@ async function createNoteStyle(sampleNote: string, instructions: string[] = []):
   });
 }
 
+// Handle audio transcription with progress tracking
 async function transcribeAudio(audioPath: string): Promise<string> {
   validateAudioFile(audioPath);
   
-  console.log('Reading audio file...');
+  logger.info('Reading audio file...');
   const audioBuffer = await fs.readFile(audioPath);
   
-  console.log('Uploading audio...');
+  logger.info('Uploading audio...');
   const formData = new FormData();
   formData.append('audio', audioBuffer, { 
     filename: 'audio.mp3',
@@ -105,13 +132,18 @@ async function transcribeAudio(audioPath: string): Promise<string> {
   });
 
   const transcriptionId = response.data.transcriptionId;
-  console.log('Transcription ID:', transcriptionId);
+  logger.info(`Transcription ID: ${transcriptionId}`);
 
+  // Poll for transcription completion
   let transcriptionResponse: TranscriptionResponse;
+  let attempts = 0;
   do {
-    console.log('Waiting for transcription...');
+    if (attempts > 0) {
+      logger.info('Waiting for transcription...');
+    }
     await new Promise(resolve => setTimeout(resolve, 2000));
     transcriptionResponse = await makeRequest(`/audio/transcriptions/${transcriptionId}`);
+    attempts++;
   } while (transcriptionResponse.data.status === 'STATUS_PROCESSING');
 
   if (transcriptionResponse.data.status === 'STATUS_ERROR') {
@@ -121,6 +153,7 @@ async function transcribeAudio(audioPath: string): Promise<string> {
   return transcriptionResponse.data.payload?.transcription || '';
 }
 
+// Create a new clinical note from transcription
 async function createNote(transcript: string): Promise<string> {
   const response = await makeRequest('/notes', {
     method: 'POST',
@@ -136,22 +169,29 @@ async function createNote(transcript: string): Promise<string> {
   return response.data.noteId;
 }
 
+// Retrieve note content with polling for completion
 async function getNote(noteId: string): Promise<any> {
   let response = await makeRequest(`/notes/${noteId}`);
+  let attempts = 0;
   
   while (response.data.status === 'STATUS_PROCESSING') {
+    if (attempts > 0) {
+      logger.info('Note still processing...');
+    }
     await new Promise(resolve => setTimeout(resolve, 2000));
-    console.log('Note still processing...');
     response = await makeRequest(`/notes/${noteId}`);
+    attempts++;
   }
   
   return response;
 }
 
+// Delete a note by ID
 async function deleteNote(noteId: string): Promise<void> {
   await makeRequest(`/notes/${noteId}`, { method: 'DELETE' });
 }
 
+// Validate audio file format and size
 function validateAudioFile(filePath: string): void {
   if (!existsSync(filePath)) {
     throw new Error(`Audio file not found: ${filePath}`);
@@ -174,53 +214,69 @@ function validateAudioFile(filePath: string): void {
   }
 }
 
+// Main execution flow
 async function main(audioFilePath: string) {
   try {
-    // Create note style
-    console.log('\n=== Creating Note Style ===');
-    await createNoteStyle(
+    logger.step('Initializing Sully API Demo');
+    logger.info(`Using API endpoint: ${SULLY_API_URL}`);
+    logger.info(`Processing audio file: ${audioFilePath}`);
+
+    // Step 1: Create note style template
+    logger.step('Step 1: Creating Note Style Template');
+    logger.info('Configuring note style with sample format and instructions...');
+    const noteStyle = await createNoteStyle(
       'CC: Headache\nHPI: Patient reports severe headache...',
       ['Use bullet points', 'Include vital signs']
     );
-    console.log('Note style created successfully');
+    logger.success('Note style template created successfully');
 
-    // Transcribe audio
-    console.log('\n=== Transcribing Audio ===');
+    // Step 2: Transcribe audio file
+    logger.step('Step 2: Transcribing Audio File');
+    logger.info('Starting audio transcription process...');
     const transcription = await transcribeAudio(audioFilePath);
-    console.log('Transcription complete');
-    console.log('Text:', transcription);
+    logger.success('Audio transcription completed');
+    logger.json('Transcription Result', {
+      text: transcription.length > 200 
+        ? transcription.substring(0, 200) + '...'
+        : transcription
+    });
 
-    // Create note
-    console.log('\n=== Creating Clinical Note ===');
+    // Step 3: Generate clinical note
+    logger.step('Step 3: Generating Clinical Note');
+    logger.info('Creating clinical note from transcription...');
     const noteId = await createNote(transcription);
-    console.log('Note created:', noteId);
+    logger.success(`Clinical note created with ID: ${noteId}`);
 
-    // Get note
-    console.log('\n=== Retrieving Note ===');
+    // Step 4: Retrieve generated note
+    logger.step('Step 4: Retrieving Generated Note');
+    logger.info('Fetching the generated clinical note...');
     const note = await getNote(noteId);
-    console.log('Note content:', note.data.payload);
+    logger.success('Note retrieved successfully');
+    logger.json('Generated Note Content', note.data.payload);
 
-    // Clean up
-    console.log('\n=== Cleaning Up ===');
+    // Step 5: Cleanup
+    logger.step('Step 5: Cleanup');
+    logger.info(`Deleting note with ID: ${noteId}`);
     await deleteNote(noteId);
-    console.log('Note deleted successfully');
+    logger.success('Demo completed successfully');
 
   } catch (error: any) {
-    console.error('\nError:', error.message);
+    logger.error(`Demo failed: ${error.message}`);
     process.exit(1);
   }
 }
 
-// Run the example with command line argument
+// CLI handler
 if (require.main === module) {
   const audioPath = process.argv[2];
   if (!audioPath) {
-    console.error('Please provide the path to an audio file');
-    console.error('Usage: npx ts-node sully-demo.ts path/to/audio-file.mp3');
+    logger.error('Missing audio file path');
+    logger.info('Usage: npx ts-node sully-demo.ts path/to/audio-file.mp3');
+    logger.info(`Supported formats: ${SUPPORTED_AUDIO_FORMATS.join(', ')}`);
     process.exit(1);
   }
   main(audioPath).catch((error: any) => {
-    console.error('Error:', error.message);
+    logger.error(`Fatal error: ${error.message}`);
     process.exit(1);
   });
 }
