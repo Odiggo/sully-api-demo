@@ -1,15 +1,16 @@
 # Sully API Demo
-Demo code for how to use Sully.ai's API
+Demo code and apps for how to use the Sully.ai public API
+
 ## Quick Start Guide
 
 ### Prerequisites
-# You'll need these before starting:
-- Node.js 14+ installed ([Download](https://nodejs.org)) # Required for running the demo
+- Node.js 14+ installed ([Download](https://nodejs.org))
 - A Sully API account with:
   - API Key
   - Account ID
 
-### Setup```bash
+### Setup
+```bash
 # Clone the repository
 git clone https://github.com/Odiggo/sully-api-demo.git
 cd sully-api-demo
@@ -17,10 +18,10 @@ cd sully-api-demo
 # Install dependencies
 npm install
 
-# Configure your environment
+
 # Create/Edit .env in the root of the project with your Sully API credentials:
-# SULLY_API_KEY=your_api_key_here
-# SULLY_ACCOUNT_ID=your_account_id_here
+SULLY_API_KEY=your_api_key_here
+SULLY_ACCOUNT_ID=your_account_id_here
 ```
 
 ### Run the Demo
