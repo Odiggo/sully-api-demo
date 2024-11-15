@@ -1,66 +1,91 @@
 # Sully API Demo
-Demo code and apps for how to use the Sully.ai public API
+Demo code showcasing the Sully.ai API capabilities for healthcare tech companies to build on
 
-## Quick Start Guide
+## 🚀 Quick Start Guide
 
 ### Prerequisites
 - Node.js 14+ installed ([Download](https://nodejs.org))
-- A Sully API account with:
+- Sully API credentials:
   - API Key
   - Account ID
+- (optional)Audio file for transcription (MP3, WAV, M4A, or OGG format)
 
-### Setup
+### 🛠️ Setup
+1. Clone the repository:
 ```bash
-# Clone the repository
 git clone https://github.com/Odiggo/sully-api-demo.git
 cd sully-api-demo
+```
 
-# Install dependencies
+2. Install dependencies:
+```bash
 npm install
+```
 
-
-# Create/Edit .env in the root of the project with your Sully API credentials:
+3. Configure environment:
+```bash
+# Create/Edit .env with your details:
 SULLY_API_KEY=your_api_key_here
 SULLY_ACCOUNT_ID=your_account_id_here
 ```
 
-### Run the Demo
+### 🎯 Running the Demo
 ```bash
-# Run with the included sample audio
+# Using the sample audio
 npx ts-node sully-demo.ts audio/demo_audio.wav
 
-# Or run with your own audio file (MP3, WAV, M4A, or OGG format, max 30MB)
+# Or with your own audio file
 npx ts-node sully-demo.ts path/to/your/audio.mp3
 ```
 
-### What the Demo Shows
-The demo script demonstrates:
-1. Audio transcription
-2. Clinical note generation
-3. Custom note styling
-4. Note retrieval and management
+### 📋 Demo Workflow
+The script demonstrates an example Sully API workflow:
 
-### Example Output
+1. **Note Style Creation**
+   - Sets up custom formatting rules
+   - Configures note structure preferences
+
+2. **Audio Transcription**
+   - Validates audio file format and size
+   - Uploads/transcribes audio via Sully API
+   - Retrieves transcription results
+
+3. **Clinical Note Generation**
+   - Processes transcription
+   - Applies note style template
+   - Generates structured clinical note
+
+4. **Note Management**
+   - Retrieves formatted note
+   - Demonstrates note deletion
+
+### 📊 Example Output
 ```bash
-=== Creating Note Style ===
-Note style created successfully
+🚀 Initializing Sully API Demo
+ℹ️  Using API endpoint: https://dev01-copilot-api.np.services.sully.ai/api/v2/ext
+ℹ️  Processing audio file: audio/demo_audio.wav
 
-=== Transcribing Audio ===
-Reading audio file...
-Uploading audio...
-Transcription complete
-Text: [transcription output]
+🚀 Step 1: Creating Note Style Template
+✅ Note style template created successfully
 
-=== Creating Clinical Note ===
-Note created: note_abc123
+🚀 Step 2: Transcribing Audio File
+ℹ️  Starting audio transcription process...
+✅ Audio transcription completed
+📋 Transcription Result:
+{
+  "text": "[transcription content]"
+}
 
-=== Retrieving Note ===
-Note content: [formatted clinical note]
-
-=== Cleaning Up ===
-Note deleted successfully
+... [additional output] ...
 ```
 
-### Sample Files
-- `audio/demo_audio.wav`: Sample audio file for testing
-- `sample-note.txt`: Example note format for custom styling
+### 📁 Project Structure
+- `sully-demo.ts`: Main demo script
+- `audio/`: Sample audio files
+- `.env.example`: Environment template
+- `README.md`: Documentation
+
+### ⚠️ Important Notes
+- Maximum audio file size: 30MB
+- Supported audio formats: MP3, WAV, M4A, OGG
+- API credentials must be valid and active
