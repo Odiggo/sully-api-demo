@@ -9,10 +9,18 @@ import { existsSync, statSync } from 'fs';
 dotenv.config();
 
 // API configuration
-//const SULLY_API_URL = 'https://dev01-copilot-api.np.services.sully.ai/api/v2/ext';
-const SULLY_API_URL = 'https://dev01-copilot-chaitanya.np.services.sully.ai/api/v2/ext';
+const SULLY_API_URL = process.env.SULLY_API_URL!;
 const API_KEY = process.env.SULLY_API_KEY!;
 const ACCOUNT_ID = process.env.SULLY_ACCOUNT_ID!;
+
+// Validate required environment variables
+if (!SULLY_API_URL || !API_KEY || !ACCOUNT_ID) {
+  console.error('❌ Missing required environment variables. Please check your .env file:');
+  if (!SULLY_API_URL) console.error('- SULLY_API_URL');
+  if (!API_KEY) console.error('- SULLY_API_KEY');
+  if (!ACCOUNT_ID) console.error('- SULLY_ACCOUNT_ID');
+  process.exit(1);
+}
 
 // Define supported audio file formats
 const SUPPORTED_AUDIO_FORMATS = ['.mp3', '.wav', '.m4a', '.ogg'];
