@@ -4,16 +4,18 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 import * as fs from 'fs/promises';
 import { existsSync, statSync } from 'fs';
+import WebSocket from 'ws'; // For real-time audio streaming
+import mic from 'node-microphone'; // For microphone access
 
 // Load environment variables from .env file
 dotenv.config();
 
-// API configuration
+// API configuration from environment variables
 const SULLY_API_URL = process.env.SULLY_API_URL!;
 const API_KEY = process.env.SULLY_API_KEY!;
 const ACCOUNT_ID = process.env.SULLY_ACCOUNT_ID!;
 
-// Validate required environment variables
+// Validate required environment variables are present
 if (!SULLY_API_URL || !API_KEY || !ACCOUNT_ID) {
   console.error('❌ Missing required environment variables. Please check your .env file:');
   if (!SULLY_API_URL) console.error('- SULLY_API_URL');
@@ -22,15 +24,16 @@ if (!SULLY_API_URL || !API_KEY || !ACCOUNT_ID) {
   process.exit(1);
 }
 
-// Define supported audio file formats
+// List of audio formats the prercorded audio transcription API can process
 const SUPPORTED_AUDIO_FORMATS = ['.mp3', '.wav', '.m4a', '.ogg'];
 
-// Type definitions for API responses
+// Type definitions for API response structures
 interface ApiResponse {
   status: "ok" | "error";
   data: any;
 }
 
+// Response type for audio transcription endpoints
 interface TranscriptionResponse extends ApiResponse {
   data: {
     transcriptionId: string;
@@ -41,6 +44,7 @@ interface TranscriptionResponse extends ApiResponse {
   };
 }
 
+// Response type for clinical note endpoints
 interface NoteResponse extends ApiResponse {
   data: {
     noteId: string;
@@ -78,7 +82,7 @@ const logger = {
   }
 };
 
-// Generic API request handler with error handling
+// Generic API request handler with authentication and error handling
 async function makeRequest(endpoint: string, options: any = {}): Promise<any> {
   const url = `${SULLY_API_URL}${endpoint}`;
   const headers: Record<string, string> = {
@@ -86,6 +90,7 @@ async function makeRequest(endpoint: string, options: any = {}): Promise<any> {
     'X-Account-Id': ACCOUNT_ID,
   };
 
+  // Only set Content-Type for JSON requests, not FormData
   if (!(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
@@ -111,7 +116,7 @@ async function makeRequest(endpoint: string, options: any = {}): Promise<any> {
   }
 }
 
-// Create a new note style template with sample format
+// Create template for note formatting and structure
 async function createNoteStyle(sampleNote: string, instructions: string[] = []): Promise<any> {
   return makeRequest('/note-styles', {
     method: 'POST',
@@ -119,7 +124,7 @@ async function createNoteStyle(sampleNote: string, instructions: string[] = []):
   });
 }
 
-// Handle audio transcription with progress tracking
+// Convert audio file to text with progress tracking
 async function transcribeAudio(audioPath: string): Promise<string> {
   validateAudioFile(audioPath);
   
@@ -142,7 +147,7 @@ async function transcribeAudio(audioPath: string): Promise<string> {
   const transcriptionId = response.data.transcriptionId;
   logger.info(`Transcription ID: ${transcriptionId}`);
 
-  // Poll for transcription completion
+  // Poll until transcription is complete
   let transcriptionResponse: TranscriptionResponse;
   let attempts = 0;
   do {
@@ -161,7 +166,7 @@ async function transcribeAudio(audioPath: string): Promise<string> {
   return transcriptionResponse.data.payload?.transcription || '';
 }
 
-// Create a new clinical note from transcription
+// Generate clinical note from transcribed text
 async function createNote(transcript: string): Promise<string> {
   const response = await makeRequest('/notes', {
     method: 'POST',
@@ -177,7 +182,7 @@ async function createNote(transcript: string): Promise<string> {
   return response.data.noteId;
 }
 
-// Retrieve note content with polling for completion
+// Fetch note content with polling for completion
 async function getNote(noteId: string): Promise<any> {
   let response = await makeRequest(`/notes/${noteId}`);
   let attempts = 0;
@@ -222,8 +227,124 @@ function validateAudioFile(filePath: string): void {
   }
 }
 
-// Main execution flow
-async function main(audioFilePath: string) {
+// Default duration for streaming demo
+const STREAMING_DEMO_DURATION = 10000; // 10 seconds in milliseconds
+
+// Real-time audio streaming and transcription demo
+async function demonstrateStreamingTranscription(durationMs: number = STREAMING_DEMO_DURATION): Promise<void> {
+  logger.step('Starting Live Audio Streaming Demo');
+  logger.info(`Demo will run for ${durationMs / 1000} seconds...`);
+  
+  // Convert HTTP/HTTPS URL to WebSocket URL
+  const wsUrl = SULLY_API_URL
+    .replace('https://', 'wss://')
+    .replace('http://', 'ws://') + '/audio/transcriptions/stream?sample_rate=16000';
+    
+  logger.info(`Connecting to WebSocket: ${wsUrl}`);
+
+  return new Promise((resolve, reject) => {
+    try {
+      // Initialize WebSocket with authentication
+      const ws = new WebSocket(wsUrl, {
+        headers: {
+          'x-api-key': API_KEY,
+          'x-account-id': ACCOUNT_ID
+        }
+      });
+
+      // Configure microphone settings
+      const microphone = new mic({
+        rate: 16000,
+        channels: 1,
+        bitwidth: 16
+      });
+
+      // Handle WebSocket connection success
+      ws.on('open', () => {
+        console.log('\n🎤 ==========================================');
+        console.log('🎤 LIVE AUDIO STREAMING IS NOW ACTIVE');
+        console.log('🎤 Start speaking! Your voice will be transcribed in real-time');
+        console.log('🎤 ==========================================\n');
+        
+        const micStream = microphone.startRecording();
+        
+        // Stream microphone data to WebSocket
+        micStream.on('data', (data) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(data);
+          }
+        });
+
+        // Display countdown timer
+        let secondsLeft = Math.floor(durationMs / 1000);
+        const countdownInterval = setInterval(() => {
+          secondsLeft--;
+          if (secondsLeft > 0) {
+            process.stdout.write(`⏱️  Time remaining: ${secondsLeft} seconds\r`);
+          }
+        }, 1000);
+
+        // Clean up countdown display
+        setTimeout(() => {
+          clearInterval(countdownInterval);
+          console.log('\n🎤 ==========================================');
+          console.log('🎤 STREAMING DEMO COMPLETED');
+          console.log('🎤 ==========================================\n');
+        }, durationMs);
+      });
+
+      // Handle incoming transcription results
+      ws.on('message', (data) => {
+        try {
+          const parsed = JSON.parse(data.toString());
+          if (parsed.text) {
+            console.log(`🗣️  ${parsed.text}`);
+          }
+        } catch (e) {
+          logger.error(`Error parsing message: ${e}`);
+        }
+      });
+
+      // Handle WebSocket errors
+      ws.on('error', (error) => {
+        logger.error(`WebSocket error: ${error}`);
+        microphone.stopRecording();
+        reject(error);
+      });
+
+      // Handle WebSocket closure
+      ws.on('close', (code, reason) => {
+        logger.info(`WebSocket closed: ${code} ${reason}`);
+        microphone.stopRecording();
+        resolve();
+      });
+
+      // Clean up resources
+      const cleanup = () => {
+        logger.info('Cleaning up streaming demo...');
+        ws.close();
+        microphone.stopRecording();
+      };
+
+      // Handle interrupt signal
+      process.on('SIGINT', cleanup);
+      
+      // End demo after specified duration
+      setTimeout(() => {
+        cleanup();
+        logger.success(`Streaming demo completed after ${durationMs / 1000} seconds`);
+        resolve();
+      }, durationMs);
+
+    } catch (error) {
+      logger.error(`Streaming demo failed: ${error}`);
+      reject(error);
+    }
+  });
+}
+
+// Main demo workflow
+async function main(audioFilePath: string, includeStreaming: boolean = false, streamingDurationMs: number = STREAMING_DEMO_DURATION) {
   try {
     logger.step('Initializing Sully API Demo');
     logger.info(`Using API endpoint: ${SULLY_API_URL}`);
@@ -268,22 +389,38 @@ async function main(audioFilePath: string) {
     await deleteNote(noteId);
     logger.success('Demo completed successfully');
 
+    // Optional streaming demo
+    if (includeStreaming) {
+      logger.step('Additional Demo: Live Audio Streaming');
+      logger.info(`Starting ${streamingDurationMs / 1000}-second streaming demo...`);
+      await demonstrateStreamingTranscription(streamingDurationMs);
+    }
+
   } catch (error: any) {
     logger.error(`Demo failed: ${error.message}`);
     process.exit(1);
   }
 }
 
-// CLI handler
+// CLI handler with argument parsing
 if (require.main === module) {
   const audioPath = process.argv[2];
+  const includeStreaming = process.argv.includes('--stream');
+  const durationArg = process.argv.find(arg => arg.startsWith('--duration='));
+  const streamingDuration = durationArg 
+    ? parseInt(durationArg.split('=')[1]) * 1000 
+    : STREAMING_DEMO_DURATION;
+  
   if (!audioPath) {
     logger.error('Missing audio file path');
-    logger.info('Usage: npx ts-node sully-demo.ts path/to/audio-file.mp3');
+    logger.info('Usage: npx ts-node sully-demo.ts path/to/audio-file.mp3 [--stream] [--duration=seconds]');
+    logger.info('Add --stream flag to include streaming demo');
+    logger.info('Add --duration=N to set streaming duration in seconds (default: 10)');
     logger.info(`Supported formats: ${SUPPORTED_AUDIO_FORMATS.join(', ')}`);
     process.exit(1);
   }
-  main(audioPath).catch((error: any) => {
+  
+  main(audioPath, includeStreaming, streamingDuration).catch((error: any) => {
     logger.error(`Fatal error: ${error.message}`);
     process.exit(1);
   });

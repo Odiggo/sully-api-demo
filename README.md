@@ -8,6 +8,17 @@ Demo code showcasing the Sully.ai API capabilities for healthcare tech companies
 - Sully API credentials:
   - API Key
   - Account ID
+- System audio dependencies:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install sox libsox-fmt-all
+
+  # macOS
+  brew install sox
+
+  # Windows
+  # Download and install Sox from https://sourceforge.net/projects/sox/
+  ```
 
 ### 🛠️ Setup
 1. Clone the repository:
@@ -31,16 +42,20 @@ SULLY_ACCOUNT_ID=your_account_id_here
 
 ### 🎯 Running the Demo
 ```bash
-# Using the sample audio
+# Basic demo with file transcription
 npx ts-node sully-demo.ts audio/demo_audio.wav
 
-# Or with your own audio file
-npx ts-node sully-demo.ts path/to/your/audio.mp3
+# Include live streaming demo (10-second default)
+npx ts-node sully-demo.ts audio/demo_audio.wav --stream
+
+# Custom streaming duration
+npx ts-node sully-demo.ts audio/demo_audio.wav --stream --duration=30
 ```
 
 ### 📋 Demo Workflow
-The script demonstrates an example Sully API workflow:
+The script demonstrates two main Sully API capabilities:
 
+#### 1. File Transcription & Note Generation
 1. **Note Style Creation**
    - Sets up custom formatting rules
    - Configures note structure preferences
@@ -59,7 +74,15 @@ The script demonstrates an example Sully API workflow:
    - Retrieves formatted note
    - Demonstrates note deletion
 
+#### 2. Live Audio Streaming (Optional)
+- Real-time audio capture and transcription
+- Streams microphone input directly to Sully API
+- Shows live transcription results
+- Configurable duration (default: 10 seconds)
+
 ### 📊 Example Output
+
+#### File Transcription Demo
 ```bash
 🚀 Initializing Sully API Demo
 ℹ️  Processing audio file: audio/demo_audio.wav
@@ -134,6 +157,22 @@ The script demonstrates an example Sully API workflow:
 ✅ Demo completed successfully
 ```
 
+#### Streaming Demo Output
+```bash
+🎤 ==========================================
+🎤 LIVE AUDIO STREAMING IS NOW ACTIVE
+🎤 Start speaking! Your voice will be transcribed in real-time
+🎤 ==========================================
+
+⏱️  Time remaining: 9 seconds
+🗣️  Hello, this is a test of the streaming audio...
+🗣️  The transcription appears in real-time as you speak...
+
+🎤 ==========================================
+🎤 STREAMING DEMO COMPLETED
+🎤 ==========================================
+```
+
 ### 📁 Project Structure
 - `sully-demo.ts`: Main demo script
 - `audio/`: Sample audio files
@@ -144,3 +183,5 @@ The script demonstrates an example Sully API workflow:
 - Maximum audio file size: 30MB
 - Supported audio formats: MP3, WAV, M4A, OGG
 - API credentials must be valid and active
+- Microphone access required for streaming demo
+- System audio dependencies (sox) required for streaming

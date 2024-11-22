@@ -13,10 +13,16 @@
   "dependencies": {
     "@types/node": "^22.9.0",
     "@types/node-fetch": "^2.6.12",
+    "@types/ws": "^8.5.13",
     "dotenv": "^16.4.5",
     "form-data": "^4.0.1",
     "node-fetch": "^2.7.0",
+    "node-microphone": "^0.1.6",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node-microphone": "^0.1.4"
   }
 }
