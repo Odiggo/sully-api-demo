@@ -139,7 +139,7 @@ async function transcribeAudio(audioPath: string): Promise<string> {
   });
   formData.append('language', 'en-US');
 
-  const response = await makeRequest('/audio/transcribe', {
+  const response = await makeRequest('/audio/transcriptions', {
     method: 'POST',
     body: formData
   });
