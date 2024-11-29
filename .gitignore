@@ -5,3 +5,4 @@ node_modules/
 *.m4a
 *.ogg
 !audio/demo_audio.wav
+.DS_Store
