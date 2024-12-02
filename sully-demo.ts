@@ -232,10 +232,10 @@ function validateAudioFile(filePath: string): void {
   }
 
   const fileSizeInMB = statSync(filePath).size / (1024 * 1024)
-  if (fileSizeInMB > 30) {
+  if (fileSizeInMB > 50) {
     throw new Error(
       `Audio file too large: ${fileSizeInMB.toFixed(1)}MB\n` +
-        'Maximum file size: 30MB',
+        'Maximum file size: 50MB',
     )
   }
 }

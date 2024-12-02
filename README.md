@@ -180,7 +180,7 @@ The script demonstrates two main Sully API capabilities:
 - `README.md`: Documentation
 
 ### ⚠️ Important Notes
-- Maximum audio file size: 30MB
+- Maximum audio file size: 50MB
 - Supported audio formats: MP3, WAV, M4A, OGG
 - API credentials must be valid and active
 - Microphone access required for streaming demo
