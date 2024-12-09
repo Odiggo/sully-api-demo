@@ -1,11 +1,12 @@
 // Import required dependencies
+import { Command } from 'commander'
 import * as dotenv from 'dotenv'
-import fetch from 'node-fetch'
 import FormData from 'form-data'
-import * as fs from 'fs/promises'
 import { existsSync, statSync } from 'fs'
-import WebSocket from 'ws' // For real-time audio streaming
+import * as fs from 'fs/promises'
+import fetch from 'node-fetch'
 import mic from 'node-microphone' // For microphone access
+import WebSocket from 'ws' // For real-time audio streaming
 
 // Load environment variables from .env file
 dotenv.config()
@@ -241,19 +242,37 @@ function validateAudioFile(filePath: string): void {
 }
 
 // Default duration for streaming demo
-const STREAMING_DEMO_DURATION = 10000 // 10 seconds in milliseconds
+const STREAMING_DEMO_DURATION = 10 // 10 seconds
 
 // Real-time audio streaming and transcription demo
-async function demonstrateStreamingTranscription(
-  durationMs: number = STREAMING_DEMO_DURATION,
-): Promise<void> {
+async function demonstrateStreaming({
+  mode,
+  duration,
+}: {
+  mode: 'client' | 'server'
+  duration: number
+}): Promise<void> {
   logger.step('Starting Live Audio Streaming Demo')
-  logger.info(`Demo will run for ${durationMs / 1000} seconds...`)
+  logger.info(`Demo will run for ${duration} seconds...`)
+
+  const durationMs = duration * 1000
+
+  let token: string | undefined
+
+  if (mode === 'client') {
+    const tokenReq = await makeRequest('/audio/transcriptions/stream/token', {
+      method: 'POST',
+      body: JSON.stringify({ expiresIn: 60 }),
+    })
+
+    token = tokenReq.data.token
+  }
 
   // Convert HTTP/HTTPS URL to WebSocket URL
   const wsUrl =
     SULLY_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') +
-    '/audio/transcriptions/stream?sample_rate=16000'
+    '/audio/transcriptions/stream?sample_rate=16000' +
+    (token ? `&token=${token}` : '')
 
   logger.info(`Connecting to WebSocket: ${wsUrl}`)
 
@@ -262,7 +281,7 @@ async function demonstrateStreamingTranscription(
       // Initialize WebSocket with authentication
       const ws = new WebSocket(wsUrl, {
         headers: {
-          'x-api-key': API_KEY,
+          ...(token ? {} : { 'x-api-key': API_KEY }),
           'x-account-id': ACCOUNT_ID,
         },
       })
@@ -294,7 +313,7 @@ async function demonstrateStreamingTranscription(
         })
 
         // Display countdown timer
-        let secondsLeft = Math.floor(durationMs / 1000)
+        let secondsLeft = duration
         const countdownInterval = setInterval(() => {
           secondsLeft--
           if (secondsLeft > 0) {
@@ -350,9 +369,7 @@ async function demonstrateStreamingTranscription(
       // End demo after specified duration
       setTimeout(() => {
         cleanup()
-        logger.success(
-          `Streaming demo completed after ${durationMs / 1000} seconds`,
-        )
+        logger.success(`Streaming demo completed after ${duration} seconds`)
         resolve()
       }, durationMs)
     } catch (error) {
@@ -363,15 +380,11 @@ async function demonstrateStreamingTranscription(
 }
 
 // Main demo workflow
-async function main(
-  audioFilePath: string,
-  includeStreaming: boolean = false,
-  streamingDurationMs: number = STREAMING_DEMO_DURATION,
-) {
+async function main({ filePath }: { filePath: string }) {
   try {
     logger.step('Initializing Sully API Demo')
     logger.info(`Using API endpoint: ${SULLY_API_URL}`)
-    logger.info(`Processing audio file: ${audioFilePath}`)
+    logger.info(`Processing audio file: ${filePath}`)
 
     // Step 1: Create note style template
     logger.step('Step 1: Creating Note Style Template')
@@ -385,7 +398,7 @@ async function main(
     // Step 2: Transcribe audio file
     logger.step('Step 2: Transcribing Audio File')
     logger.info('Starting audio transcription process...')
-    const transcription = await transcribeAudio(audioFilePath)
+    const transcription = await transcribeAudio(filePath)
     logger.success('Audio transcription completed')
     logger.json('Transcription Result', {
       text:
@@ -411,46 +424,54 @@ async function main(
     logger.step('Step 5: Cleanup')
     logger.info(`Deleting note with ID: ${noteId}`)
     await deleteNote(noteId)
-    logger.success('Demo completed successfully')
-
-    // Optional streaming demo
-    if (includeStreaming) {
-      logger.step('Additional Demo: Live Audio Streaming')
-      logger.info(
-        `Starting ${streamingDurationMs / 1000}-second streaming demo...`,
-      )
-      await demonstrateStreamingTranscription(streamingDurationMs)
-    }
+    logger.success('Note deleted successfully')
   } catch (error: any) {
     logger.error(`Demo failed: ${error.message}`)
     process.exit(1)
   }
 }
 
-// CLI handler with argument parsing
-if (require.main === module) {
-  const audioPath = process.argv[2]
-  const includeStreaming = process.argv.includes('--stream')
-  const durationArg = process.argv.find((arg) => arg.startsWith('--duration='))
-  const streamingDuration = durationArg
-    ? parseInt(durationArg.split('=')[1]) * 1000
-    : STREAMING_DEMO_DURATION
+const program = new Command()
 
-  if (!audioPath) {
-    logger.error('Missing audio file path')
-    logger.info(
-      'Usage: npx ts-node sully-demo.ts path/to/audio-file.mp3 [--stream] [--duration=seconds]',
-    )
-    logger.info('Add --stream flag to include streaming demo')
-    logger.info(
-      'Add --duration=N to set streaming duration in seconds (default: 10)',
-    )
-    logger.info(`Supported formats: ${SUPPORTED_AUDIO_FORMATS.join(', ')}`)
-    process.exit(1)
-  }
+program
+  .name('sully-cli')
+  .description('CLI for Sully AI Services')
+  .version('0.1.0')
 
-  main(audioPath, includeStreaming, streamingDuration).catch((error: any) => {
-    logger.error(`Fatal error: ${error.message}`)
-    process.exit(1)
+program
+  .command('note')
+  .description('Create a note style, transcribe audio file, and generate note')
+  .argument('[path]', 'Path to the audio file', 'audio/demo_audio.wav')
+  .action(async (filePath) => {
+    try {
+      logger.step('Starting demo...')
+      await main({ filePath })
+      logger.success('Demo completed.')
+      process.exit(0)
+    } catch (error) {
+      logger.error(`Demo failed: ${error}`)
+    }
   })
-}
+
+program
+  .command('stream')
+  .description('Start a live audio streaming demo')
+  .option(
+    '-d, --duration <ms>',
+    'Duration in milliseconds',
+    `${STREAMING_DEMO_DURATION}`,
+  )
+  .option('-m, --mode <string>', 'Streaming mode (client|server)', 'server')
+  .action(async (options) => {
+    const duration = parseInt(options.duration, 10)
+    try {
+      logger.step('Starting streaming demo...')
+      await demonstrateStreaming({ duration, mode: options.mode })
+      logger.success('Streaming demo completed.')
+      process.exit(0)
+    } catch (error) {
+      logger.error(`Streaming demo failed: ${error}`)
+    }
+  })
+
+program.parse(process.argv)

@@ -1,6 +1,6 @@
 {
   "name": "sully-api-demo",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Demo code and apps for how to use the Sully.ai public API",
   "main": "index.js",
   "scripts": {
@@ -12,17 +12,18 @@
   "license": "ISC",
   "dependencies": {
     "@types/node": "^22.9.0",
-    "@types/node-fetch": "^2.6.12",
     "@types/ws": "^8.5.13",
+    "commander": "^12.1.0",
     "dotenv": "^16.4.5",
     "form-data": "^4.0.1",
-    "node-fetch": "^2.7.0",
+    "node-fetch": "^3.3.2",
     "node-microphone": "^0.1.6",
-    "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "@types/node-microphone": "^0.1.4"
+    "@types/node-fetch": "^2.6.12",
+    "@types/node-microphone": "^0.1.4",
+    "tsx": "^4.19.2"
   }
 }
