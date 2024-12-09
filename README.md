@@ -43,13 +43,17 @@ SULLY_ACCOUNT_ID=your_account_id_here
 ### 🎯 Running the Demo
 ```bash
 # Basic demo with file transcription
-npx ts-node sully-demo.ts audio/demo_audio.wav
+npx tsx sully-demo.ts note
+
+# With custom audio file
+npx tsx sully-demo.ts note /path/audio.wav
 
 # Include live streaming demo (10-second default)
-npx ts-node sully-demo.ts audio/demo_audio.wav --stream
+npx tsx sully-demo.ts stream
 
-# Custom streaming duration
-npx ts-node sully-demo.ts audio/demo_audio.wav --stream --duration=30
+# Client side with custom duration
+
+npx tsx sully-demo.ts stream -m client -d 20
 ```
 
 ### 📋 Demo Workflow
