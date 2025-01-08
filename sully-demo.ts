@@ -271,7 +271,9 @@ async function demonstrateStreaming({
   // Convert HTTP/HTTPS URL to WebSocket URL
   const wsUrl =
     SULLY_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') +
-    '/audio/transcriptions/stream?sample_rate=16000'
+    `/audio/transcriptions/stream?sample_rate=16000${
+      token ? `&account_id=${ACCOUNT_ID}&api_token=${token}` : ''
+    }`
 
   logger.info(`Connecting to WebSocket: ${wsUrl}`)
 
@@ -280,8 +282,9 @@ async function demonstrateStreaming({
       // Initialize WebSocket with authentication
       const ws = new WebSocket(wsUrl, {
         headers: {
-          ...(token ? { 'x-api-token': token } : { 'x-api-key': API_KEY }),
-          'x-account-id': ACCOUNT_ID,
+          ...(token
+            ? {}
+            : { 'x-api-key': API_KEY, 'x-account-id': ACCOUNT_ID }),
         },
       })
 
