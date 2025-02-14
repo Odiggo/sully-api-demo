@@ -271,7 +271,7 @@ async function demonstrateStreaming({
   // Convert HTTP/HTTPS URL to WebSocket URL
   const wsUrl =
     SULLY_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') +
-    `/audio/transcriptions/stream?sample_rate=16000${
+    `/audio/transcriptions/stream?sample_rate=16000&encoding=linear16${
       token ? `&account_id=${ACCOUNT_ID}&api_token=${token}` : ''
     }`
 
