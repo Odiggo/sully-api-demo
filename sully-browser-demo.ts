@@ -69,10 +69,18 @@ export class SullyStreamingDemo {
       // Set timeout to stop recording after duration
       if (this.config.duration) {
         console.log(`Setting auto-stop timer for ${this.config.duration}ms`);
-        setTimeout(() => {
-          console.log('Auto-stop timer triggered');
-          this.stop();
-        }, this.config.duration);
+        let remainingTime = Math.floor(this.config.duration / 1000);
+        
+        const countdownInterval = setInterval(() => {
+          remainingTime--;
+          console.log(`Recording time remaining: ${remainingTime} seconds`);
+          
+          if (remainingTime <= 0) {
+            clearInterval(countdownInterval);
+            console.log('Auto-stop timer triggered');
+            this.stop();
+          }
+        }, 1000);
       }
     } catch (error) {
       console.error('Error in start():', error);
@@ -125,21 +133,6 @@ export class SullyStreamingDemo {
           const data = JSON.parse(event.data);
           if (data.type === 'status' && data.status === 'connected') {
             console.log('WebSocket connection confirmed');
-            // Reset onmessage to the normal handler after connection is confirmed
-            if (this.ws) {
-              this.ws.onmessage = (event) => {
-                try {
-                  const data = JSON.parse(event.data);
-                  if (data.text) {
-                    console.log('Received transcription:', data.text);
-                    this.config.onTranscription?.(data.text);
-                  }
-                } catch (error) {
-                  console.error('Error parsing transcription message:', error);
-                  this.handleError(error as Error);
-                }
-              };
-            }
             resolve();
           }
         } catch (error) {
@@ -156,6 +149,28 @@ export class SullyStreamingDemo {
         reject(new Error('WebSocket connection failed'));
       };
     });
+
+    this.ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.text) {
+          console.log('Received transcription:', data.text);
+          this.config.onTranscription?.(data.text);
+        }
+      } catch (error) {
+        console.error('Error parsing transcription message:', error);
+        this.handleError(error as Error);
+      }
+    };
+
+    this.ws.onclose = () => {
+      console.log('WebSocket connection closed');
+      this.stop();
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
   }
 
   private async initializeAudioRecording(): Promise<void> {
