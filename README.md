@@ -52,12 +52,14 @@ npx tsx sully-demo.ts note /path/audio.wav
 npx tsx sully-demo.ts stream
 
 # Client side with custom duration
-
 npx tsx sully-demo.ts stream -m client -d 20
+
+# Start the browser-based demo
+npm run start:browser
 ```
 
 ### 📋 Demo Workflow
-The script demonstrates two main Sully API capabilities:
+The script demonstrates three main Sully API capabilities:
 
 #### 1. File Transcription & Note Generation
 1. **Note Style Creation**
@@ -83,6 +85,20 @@ The script demonstrates two main Sully API capabilities:
 - Streams microphone input directly to Sully API
 - Shows live transcription results
 - Configurable duration (default: 10 seconds)
+
+#### 3. Browser-Based Demo
+- Interactive web interface for real-time transcription
+- WebSocket-based streaming directly from browser
+- Visual status indicators and controls
+- Accessible at `http://localhost:3000` after starting the server
+
+To use the browser demo:
+1. Start the server: `npm run start:browser`
+2. Open `http://localhost:3000` in your browser
+3. Click "Start Recording" to begin streaming
+4. Grant microphone permissions when prompted
+5. Speak into your microphone to see real-time transcription
+6. Click "Stop Recording" to end the session
 
 ### 📊 Example Output
 
@@ -179,6 +195,9 @@ The script demonstrates two main Sully API capabilities:
 
 ### 📁 Project Structure
 - `sully-demo.ts`: Main demo script
+- `server.ts`: Express server for browser demo
+- `sully-browser-demo.ts`: Browser-based streaming implementation
+- `demo.html`: Web interface for browser demo
 - `audio/`: Sample audio files
 - `.env.example`: Environment template
 - `README.md`: Documentation
@@ -189,3 +208,5 @@ The script demonstrates two main Sully API capabilities:
 - API credentials must be valid and active
 - Microphone access required for streaming demo
 - System audio dependencies (sox) required for streaming
+- Browser demo requires modern browser with WebSocket support
+- Microphone permissions required for browser-based streaming

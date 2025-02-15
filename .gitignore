@@ -7,3 +7,4 @@ node_modules/
 !audio/demo_audio.wav
 .DS_Store
 .data/
+dist/

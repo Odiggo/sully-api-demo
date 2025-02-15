@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Sully AI Streaming Demo</title>
+    <style>
+        .transcription {
+            margin: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            min-height: 100px;
+        }
+
+        .controls {
+            margin: 20px;
+        }
+
+        .status {
+            margin: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .status.starting { background: #fff3cd; color: #856404; }
+        .status.connecting { background: #cce5ff; color: #004085; }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .status.error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+
+<body>
+    <div class="controls">
+        <button id="startBtn">Start Recording</button>
+        <button id="stopBtn" disabled>Stop Recording</button>
+    </div>
+    <div id="status" class="status"></div>
+    <div class="transcription" id="output"></div>
+
+    <script type="module">
+        import { SullyStreamingDemo } from './dist/sully-browser-demo.js';
+
+        const statusEl = document.getElementById('status');
+        
+        function updateStatus(status) {
+            const statusMessages = {
+                starting: '🚀 Initializing...',
+                connecting: '🔄 Connecting to server...',
+                connected: '✅ Connected and streaming',
+                disconnected: '⏹️ Disconnected',
+                error: '❌ Connection error'
+            };
+            
+            // Remove all status classes
+            statusEl.classList.remove('starting', 'connecting', 'connected', 'disconnected', 'error');
+            // Add current status class
+            statusEl.classList.add(status);
+            // Update text
+            statusEl.textContent = statusMessages[status] || status;
+        }
+
+        const demo = new SullyStreamingDemo({
+            onTranscription: (text) => {
+                const output = document.getElementById('output');
+                output.textContent += text + ' ';
+            },
+            onError: (error) => {
+                console.error('Streaming error:', error);
+                alert('Streaming error: ' + error.message);
+                updateStatus('error');
+                toggleButtons(false);
+            },
+            onComplete: () => {
+                console.log('Streaming completed');
+                toggleButtons(false);
+            },
+            onStatusChange: (status) => {
+                console.log('Connection status:', status);
+                updateStatus(status);
+            }
+        });
+
+        function toggleButtons(isRecording) {
+            document.getElementById('startBtn').disabled = isRecording;
+            document.getElementById('stopBtn').disabled = !isRecording;
+        }
+
+        document.getElementById('startBtn').onclick = async () => {
+            document.getElementById('output').textContent = '';
+            toggleButtons(true);
+            await demo.start();
+        };
+
+        document.getElementById('stopBtn').onclick = () => {
+            demo.stop();
+            toggleButtons(false);
+        };
+
+        // Initialize status display
+        updateStatus('disconnected');
+    </script>
+</body>
+
+</html>
