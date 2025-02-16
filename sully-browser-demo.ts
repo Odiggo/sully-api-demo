@@ -22,6 +22,8 @@ export class SullyStreamingDemo {
   private mediaRecorder: MediaRecorder | null = null;
   private stream: MediaStream | null = null;
   private config: StreamingConfig;
+  private segments: { text: string; isFinal: boolean }[] = [];
+  private currentSegmentIndex: number = 0;
 
   constructor(config: StreamingConfig) {
     this.config = {
@@ -36,6 +38,8 @@ export class SullyStreamingDemo {
    */
   async start(): Promise<void> {
     try {
+      this.segments = []; // Reset segments
+      this.currentSegmentIndex = 0;
       console.log('Starting Sully Streaming Demo...');
       this.config.onStatusChange?.('starting');
       // Get streaming token from server
@@ -70,11 +74,11 @@ export class SullyStreamingDemo {
       if (this.config.duration) {
         console.log(`Setting auto-stop timer for ${this.config.duration}ms`);
         let remainingTime = Math.floor(this.config.duration / 1000);
-        
+
         const countdownInterval = setInterval(() => {
           remainingTime--;
           console.log(`Recording time remaining: ${remainingTime} seconds`);
-          
+
           if (remainingTime <= 0) {
             clearInterval(countdownInterval);
             console.log('Auto-stop timer triggered');
@@ -108,6 +112,25 @@ export class SullyStreamingDemo {
     }
     console.log('Cleanup complete');
     this.config.onComplete?.();
+  }
+
+  private updateSegments(text: string, isFinal: boolean): void {
+    if (isFinal) {
+      // For final results, update current segment and move to next
+      this.segments[this.currentSegmentIndex] = { text, isFinal: true };
+      this.currentSegmentIndex++;
+    } else {
+      // For interim results, always update the current segment
+      this.segments[this.currentSegmentIndex] = { text, isFinal: false };
+    }
+
+    // Combine segments into final text
+    const displayText = this.segments
+      .map(segment => segment.text)
+      .join(' ');
+
+    // Send the combined text to the UI
+    this.config.onTranscription?.(displayText);
   }
 
   private async initializeWebSocket(
@@ -154,8 +177,8 @@ export class SullyStreamingDemo {
       try {
         const data = JSON.parse(event.data);
         if (data.text) {
-          console.log('Received transcription:', data.text);
-          this.config.onTranscription?.(data.text);
+          console.log('Received transcription:', data.text, 'isFinal:', data.isFinal);
+          this.updateSegments(data.text, data.isFinal);
         }
       } catch (error) {
         console.error('Error parsing transcription message:', error);
