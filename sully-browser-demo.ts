@@ -125,9 +125,7 @@ export class SullyStreamingDemo {
     }
 
     // Combine segments into final text
-    const displayText = this.segments
-      .map(segment => segment.text)
-      .join(' ');
+    const displayText = this.segments.map((segment) => segment.text).join(' ');
 
     // Send the combined text to the UI
     this.config.onTranscription?.(displayText);
@@ -177,7 +175,7 @@ export class SullyStreamingDemo {
       try {
         const data = JSON.parse(event.data);
         if (data.text) {
-          console.log('Received transcription:', data.text, 'isFinal:', data.isFinal);
+          console.log('Received transcription:', data);
           this.updateSegments(data.text, data.isFinal);
         }
       } catch (error) {
