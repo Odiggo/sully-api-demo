@@ -248,9 +248,11 @@ const STREAMING_DEMO_DURATION = 10; // 10 seconds
 async function demonstrateStreaming({
   mode,
   duration,
+  language,
 }: {
   mode: 'client' | 'server';
   duration: number;
+  language?: string;
 }): Promise<void> {
   logger.step('Starting Live Audio Streaming Demo');
   logger.info(`Demo will run for ${duration} seconds...`);
@@ -269,11 +271,28 @@ async function demonstrateStreaming({
   }
 
   // Convert HTTP/HTTPS URL to WebSocket URL
-  const wsUrl =
+  const baseWsUrl =
     SULLY_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') +
-    `/audio/transcriptions/stream?sample_rate=16000&encoding=linear16${
-      token ? `&account_id=${ACCOUNT_ID}&api_token=${token}` : ''
-    }`;
+    '/audio/transcriptions/stream';
+
+  // Build query parameters
+  const params = new URLSearchParams({
+    sample_rate: '16000',
+    encoding: 'linear16',
+  });
+
+  // Add language parameter if provided
+  if (language) {
+    params.append('language', language);
+  }
+
+  // Add authentication parameters for client mode
+  if (token) {
+    params.append('account_id', ACCOUNT_ID);
+    params.append('api_token', token);
+  }
+
+  const wsUrl = `${baseWsUrl}?${params.toString()}`;
 
   logger.info(`Connecting to WebSocket: ${wsUrl}`);
 
@@ -468,11 +487,16 @@ program
     `${STREAMING_DEMO_DURATION}`,
   )
   .option('-m, --mode <string>', 'Streaming mode (client|server)', 'server')
+  .option('-l, --language <string>', 'Language code (e.g., en-US)')
   .action(async (options) => {
     const duration = parseInt(options.duration, 10);
     try {
       logger.step('Starting streaming demo...');
-      await demonstrateStreaming({ duration, mode: options.mode });
+      await demonstrateStreaming({
+        duration,
+        mode: options.mode,
+        language: options.language,
+      });
       logger.success('Streaming demo completed.');
       process.exit(0);
     } catch (error) {
