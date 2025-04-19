@@ -482,8 +482,8 @@ program
   .command('stream')
   .description('Start a live audio streaming demo')
   .option(
-    '-d, --duration <ms>',
-    'Duration in milliseconds',
+    '-d, --duration <s>',
+    'Duration in seconds',
     `${STREAMING_DEMO_DURATION}`,
   )
   .option('-m, --mode <string>', 'Streaming mode (client|server)', 'server')
