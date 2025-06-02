@@ -4,11 +4,12 @@ Demo code showcasing the Sully.ai API capabilities for healthcare tech companies
 ## 🚀 Quick Start Guide
 
 ### Prerequisites
-- Node.js 14+ installed ([Download](https://nodejs.org))
+- Node.js 18+ installed ([Download](https://nodejs.org))
 - Sully API credentials:
   - API Key
   - Account ID
-- System audio dependencies:
+  - API URL
+- System audio dependencies for streaming demos:
   ```bash
   # Ubuntu/Debian
   sudo apt-get install sox libsox-fmt-all
@@ -30,32 +31,50 @@ cd sully-api-demo
 2. Install dependencies:
 ```bash
 npm install
+# or if you prefer bun:
+# bun install
 ```
 
 3. Configure environment:
 ```bash
-# Create/Edit .env with your details:
+# Create .env file with your Sully API credentials:
+cp .env.example .env
+# Edit .env with your actual values:
 SULLY_API_URL=your_api_url_here
 SULLY_API_KEY=your_api_key_here
 SULLY_ACCOUNT_ID=your_account_id_here
 ```
 
-### 🎯 Running the Demo
+### 🎯 Running the Demos
+
+#### File Transcription & Note Generation Demo
 ```bash
-# Basic demo with file transcription
-npx tsx sully-demo.ts note
+# Basic demo with default sample audio file
+npm run start
+# or: npx tsx sully-demo.ts note
 
 # With custom audio file
-npx tsx sully-demo.ts note /path/audio.wav
+npx tsx sully-demo.ts note /path/to/your/audio.wav
+```
 
-# Include live streaming demo (10-second default)
+#### Live Audio Streaming Demo
+```bash
+# Server-side streaming (10-second default)
 npx tsx sully-demo.ts stream
 
-# Client side with custom duration
+# Client-side streaming with custom duration
 npx tsx sully-demo.ts stream -m client -d 20
 
-# Start the browser-based demo
+# With specific language
+npx tsx sully-demo.ts stream -l en-US -d 15
+```
+
+#### Browser-Based Demo
+```bash
+# Start the web server
 npm run start:browser
+
+# Then open http://localhost:3000 in your browser
 ```
 
 ### 📋 Demo Workflow
@@ -85,6 +104,7 @@ The script demonstrates three main Sully API capabilities:
 - Streams microphone input directly to Sully API
 - Shows live transcription results
 - Configurable duration (default: 10 seconds)
+- Supports both client-side and server-side streaming modes
 
 #### 3. Browser-Based Demo
 - Interactive web interface for real-time transcription
@@ -105,6 +125,7 @@ To use the browser demo:
 #### File Transcription Demo
 ```bash
 🚀 Initializing Sully API Demo
+ℹ️  Using API endpoint: https://api.sully.ai
 ℹ️  Processing audio file: audio/demo_audio.wav
 
 🚀 Step 1: Creating Note Style Template
@@ -174,6 +195,7 @@ To use the browser demo:
 
 🚀 Step 5: Cleanup
 ℹ️  Deleting note with ID: note_def456uvw
+✅ Note deleted successfully
 ✅ Demo completed successfully
 ```
 
@@ -194,19 +216,61 @@ To use the browser demo:
 ```
 
 ### 📁 Project Structure
-- `sully-demo.ts`: Main demo script
-- `server.ts`: Express server for browser demo
-- `sully-browser-demo.ts`: Browser-based streaming implementation
-- `demo.html`: Web interface for browser demo
-- `audio/`: Sample audio files
-- `.env.example`: Environment template
-- `README.md`: Documentation
+```
+sully-api-demo/
+├── audio/
+│   └── demo_audio.wav          # Sample audio file for testing
+├── dist/                       # Compiled TypeScript output
+├── .data/                      # Runtime data directory
+├── sully-demo.ts              # Main CLI demo script
+├── server.ts                  # Express server for browser demo
+├── sully-browser-demo.ts      # Browser-based streaming client
+├── demo.html                  # Web interface for browser demo
+├── package.json               # Dependencies and scripts
+├── tsconfig.json              # TypeScript configuration
+├── tsconfig.browser.json      # Browser-specific TypeScript config
+├── .env                       # Environment variables (create from .env.example)
+├── .gitignore                 # Git ignore rules
+├── .prettierrc.yml           # Code formatting configuration
+└── README.md                  # This file
+```
 
-### ⚠️ Important Notes
-- Maximum audio file size: 50MB
-- Supported audio formats: MP3, WAV, M4A, OGG
-- API credentials must be valid and active
-- Microphone access required for streaming demo
-- System audio dependencies (sox) required for streaming
-- Browser demo requires modern browser with WebSocket support
-- Microphone permissions required for browser-based streaming
+### 🔧 Available Scripts
+- `npm run start` - Run the file transcription demo with default audio
+- `npm run start:browser` - Start the web server for browser demo
+- `npm test` - Run tests (placeholder)
+
+### 🎵 Supported Audio Formats
+The API supports the following audio formats for file transcription:
+- `.mp3` - MPEG Audio Layer 3
+- `.wav` - Waveform Audio File Format
+- `.m4a` - MPEG-4 Audio
+- `.ogg` - Ogg Vorbis
+
+### 🔑 Environment Variables
+Required environment variables in your `.env` file:
+- `SULLY_API_URL` - The Sully API endpoint URL
+- `SULLY_API_KEY` - Your API key for authentication
+- `SULLY_ACCOUNT_ID` - Your account identifier
+
+Optional:
+- `PORT` - Port for the browser demo server (default: 3000)
+
+### 🛠️ Development
+The project uses TypeScript with ES modules. Key technologies:
+- **TypeScript** - Type-safe JavaScript
+- **Node.js** - Runtime environment
+- **Express** - Web server for browser demo
+- **WebSocket** - Real-time streaming communication
+- **Commander.js** - CLI argument parsing
+- **node-microphone** - Audio capture for streaming
+
+### 🔍 Troubleshooting
+- **Audio file not found**: Ensure the audio file path is correct and the file exists
+- **API authentication errors**: Verify your `.env` file contains valid credentials
+- **Microphone access denied**: Grant microphone permissions in your browser/system
+- **WebSocket connection failed**: Check your network connection and API endpoint
+- **Transcription timeout**: Large audio files may take longer to process
+
+### 📚 API Documentation
+For detailed API documentation and additional features, visit the [Sully AI Documentation](https://docs.sully.ai).
