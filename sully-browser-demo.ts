@@ -140,7 +140,7 @@ export class SullyStreamingDemo {
       .replace('https://', 'wss://')
       .replace('http://', 'ws://');
 
-    const fullUrl = `${wsUrl}/audio/transcriptions/stream?sample_rate=16000&account_id=${accountId}&api_token=${token}`;
+    const fullUrl = `${wsUrl}/audio/transcriptions/stream?account_id=${accountId}&api_token=${token}`;
     console.log('Connecting to WebSocket:', wsUrl);
 
     this.ws = new WebSocket(fullUrl);
@@ -174,6 +174,19 @@ export class SullyStreamingDemo {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+
+        // Handle status messages
+        if (data.type === 'status') {
+          console.log('Received status message:', data);
+          if (data.status === 'disconnected') {
+            console.log('Server initiated disconnection');
+            this.config.onStatusChange?.('disconnected');
+            this.stop();
+            return;
+          }
+        }
+
+        // Handle transcription messages
         if (data.text) {
           console.log('Received transcription:', data);
           this.updateSegments(data.text, data.isFinal);
@@ -206,6 +219,12 @@ export class SullyStreamingDemo {
       console.log('MediaRecorder initialized');
 
       this.mediaRecorder.ondataavailable = async (event) => {
+        console.log(
+          'Received audio chunk',
+          event.data.size,
+          this.ws?.readyState,
+        );
+
         if (event.data.size > 0 && this.ws?.readyState === WebSocket.OPEN) {
           console.log(
             `Processing audio chunk of size: ${event.data.size} bytes`,
@@ -228,8 +247,8 @@ export class SullyStreamingDemo {
       };
 
       // Start recording with small timeslices for real-time streaming
-      console.log('Starting MediaRecorder with 100ms timeslices');
-      this.mediaRecorder.start(100);
+      console.log('Starting MediaRecorder with 250ms timeslices');
+      this.mediaRecorder.start(250);
     } catch (error) {
       console.error('Error in initializeAudioRecording:', error);
       this.handleError(error as Error);
