@@ -247,8 +247,8 @@ export class SullyStreamingDemo {
       };
 
       // Start recording with small timeslices for real-time streaming
-      console.log('Starting MediaRecorder with 250ms timeslices');
-      this.mediaRecorder.start(250);
+      console.log('Starting MediaRecorder with 1s timeslices');
+      this.mediaRecorder.start(1000);
     } catch (error) {
       console.error('Error in initializeAudioRecording:', error);
       this.handleError(error as Error);
