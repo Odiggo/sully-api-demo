@@ -29,6 +29,6 @@
     "@types/node-fetch": "^2.6.12",
     "@types/node-microphone": "^0.1.4",
     "ts-node": "^10.9.2",
-    "tsx": "^4.19.2"
+    "tsx": "^4.20.3"
   }
 }
