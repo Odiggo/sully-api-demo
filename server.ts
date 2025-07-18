@@ -36,7 +36,7 @@ app.post(
   async (req: express.Request, res: express.Response) => {
     try {
       const response = await fetch(
-        `${process.env.SULLY_API_URL}/audio/transcriptions/stream/token`,
+        `${process.env.SULLY_API_URL}/v1/audio/transcriptions/stream/token`,
         {
           method: 'POST',
           headers: {
@@ -55,7 +55,7 @@ app.post(
       const data = await response.json();
       res.json({
         token: data.data.token,
-        apiUrl: process.env.SULLY_API_URL,
+        apiUrl: `${process.env.SULLY_API_URL}/v1`,
         accountId: process.env.SULLY_ACCOUNT_ID,
       });
     } catch (error) {

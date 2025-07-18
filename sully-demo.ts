@@ -39,10 +39,12 @@ interface ApiResponse {
 // Response type for audio transcription endpoints
 interface TranscriptionResponse extends ApiResponse {
   data: {
-    transcriptionId: string;
-    status: 'STATUS_PROCESSING' | 'STATUS_DONE' | 'STATUS_ERROR';
-    payload?: {
-      transcription?: string;
+    id: string;
+    status: 'processing' | 'completed' | 'error';
+    result?: {
+      channels?: {
+        transcript?: string;
+      }[];
     };
   };
 }
@@ -130,7 +132,7 @@ async function createNoteStyle(
   sampleNote: string,
   instructions: string[] = [],
 ): Promise<any> {
-  return makeRequest('/note-styles', {
+  return makeRequest('/v1/note-styles', {
     method: 'POST',
     body: JSON.stringify({ sampleNote, instructions }),
   });
@@ -151,12 +153,12 @@ async function transcribeAudio(audioPath: string): Promise<string> {
   });
   formData.append('language', 'en-US');
 
-  const response = await makeRequest('/audio/transcriptions', {
+  const response = await makeRequest('/v2/audio/transcriptions', {
     method: 'POST',
     body: formData,
   });
 
-  const transcriptionId = response.data.transcriptionId;
+  const transcriptionId = response.data.id;
   logger.info(`Transcription ID: ${transcriptionId}`);
 
   // Poll until transcription is complete
@@ -168,21 +170,21 @@ async function transcribeAudio(audioPath: string): Promise<string> {
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
     transcriptionResponse = await makeRequest(
-      `/audio/transcriptions/${transcriptionId}`,
+      `/v2/audio/transcriptions/${transcriptionId}`,
     );
     attempts++;
-  } while (transcriptionResponse.data.status === 'STATUS_PROCESSING');
+  } while (transcriptionResponse.data.status === 'processing');
 
-  if (transcriptionResponse.data.status === 'STATUS_ERROR') {
+  if (transcriptionResponse.data.status === 'error') {
     throw new Error('Transcription failed');
   }
 
-  return transcriptionResponse.data.payload?.transcription || '';
+  return transcriptionResponse.data.result?.channels?.[0]?.transcript || '';
 }
 
 // Generate clinical note from transcribed text
 async function createNote(transcript: string): Promise<string> {
-  const response = await makeRequest('/notes', {
+  const response = await makeRequest('/v1/notes', {
     method: 'POST',
     body: JSON.stringify({
       transcript,
@@ -198,7 +200,7 @@ async function createNote(transcript: string): Promise<string> {
 
 // Fetch note content with polling for completion
 async function getNote(noteId: string): Promise<any> {
-  let response = await makeRequest(`/notes/${noteId}`);
+  let response = await makeRequest(`/v1/notes/${noteId}`);
   let attempts = 0;
 
   while (response.data.status === 'STATUS_PROCESSING') {
@@ -206,7 +208,7 @@ async function getNote(noteId: string): Promise<any> {
       logger.info('Note still processing...');
     }
     await new Promise((resolve) => setTimeout(resolve, 2000));
-    response = await makeRequest(`/notes/${noteId}`);
+    response = await makeRequest(`/v1/notes/${noteId}`);
     attempts++;
   }
 
@@ -215,7 +217,7 @@ async function getNote(noteId: string): Promise<any> {
 
 // Delete a note by ID
 async function deleteNote(noteId: string): Promise<void> {
-  await makeRequest(`/notes/${noteId}`, { method: 'DELETE' });
+  await makeRequest(`/v1/notes/${noteId}`, { method: 'DELETE' });
 }
 
 // Validate audio file format and size
@@ -262,7 +264,7 @@ async function demonstrateStreaming({
   let token: string | undefined;
 
   if (mode === 'client') {
-    const tokenReq = await makeRequest('/audio/transcriptions/stream/token', {
+    const tokenReq = await makeRequest('/v1/audio/transcriptions/stream/token', {
       method: 'POST',
       body: JSON.stringify({ expiresIn: 60 }),
     });
@@ -273,7 +275,7 @@ async function demonstrateStreaming({
   // Convert HTTP/HTTPS URL to WebSocket URL
   const baseWsUrl =
     SULLY_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') +
-    '/audio/transcriptions/stream';
+    '/v1/audio/transcriptions/stream';
 
   // Build query parameters
   const params = new URLSearchParams({
