@@ -23,6 +23,15 @@ const rootDir = path.join(__dirname, '..');
 app.use(express.static(rootDir));
 app.use('/dist', express.static(__dirname));
 
+// Serve AudioWorklet script — must be a real URL, cannot be bundled
+// Note: the worklet is in the dist/ subdirectory of the package
+app.use(
+  '/audio-worklet',
+  express.static(
+    path.join(rootDir, 'node_modules/@speechmatics/browser-audio-input/dist'),
+  ),
+);
+
 // Serve the demo page at the root URL
 app.get('/', (req: express.Request, res: express.Response) => {
   const htmlPath = path.join(rootDir, 'demo.html');
