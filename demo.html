@@ -28,6 +28,7 @@
         .status.connected { background: #d4edda; color: #155724; }
         .status.disconnected { background: #f8d7da; color: #721c24; }
         .status.error { background: #f8d7da; color: #721c24; }
+        .status.reconnecting { background: #fff3cd; color: #856404; }
 
         .segment {
             display: inline;
@@ -64,11 +65,12 @@
                 connecting: '🔄 Connecting to server...',
                 connected: '✅ Connected and streaming',
                 disconnected: '⏹️ Disconnected',
-                error: '❌ Connection error'
+                error: '❌ Connection error',
+                reconnecting: '🔄 Reconnecting...'
             };
             
             // Remove all status classes
-            statusEl.classList.remove('starting', 'connecting', 'connected', 'disconnected', 'error');
+            statusEl.classList.remove('starting', 'connecting', 'connected', 'disconnected', 'error', 'reconnecting');
             // Add current status class
             statusEl.classList.add(status);
             // Update text
