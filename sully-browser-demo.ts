@@ -255,9 +255,9 @@ export class SullyStreamingDemo {
 
         // Handle status messages
         if (data.type === 'status') {
-          console.log('Received status message:', data);
+          console.log('Received status message:', JSON.stringify(data));
           if (data.status === 'disconnected') {
-            console.log('Server initiated disconnection');
+            console.warn('Server initiated disconnection — full payload:', JSON.stringify(data));
             this.stop();
             return;
           }
@@ -265,7 +265,7 @@ export class SullyStreamingDemo {
 
         // Handle transcription messages
         if (data.text) {
-          console.log('Received transcription:', data);
+          console.log(`Received transcription [isFinal=${data.isFinal}]:`, JSON.stringify(data));
           this.updateSegments(data.text, data.isFinal);
         }
       } catch (error) {

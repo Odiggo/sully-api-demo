@@ -10,7 +10,7 @@
     "start:note": "tsx sully-demo.ts note",
     "start:stream": "tsx sully-demo.ts stream",
     "build:server": "tsc -p tsconfig.browser.json",
-    "build:client": "esbuild sully-browser-demo.ts --bundle --outfile=dist/sully-browser-demo.js --platform=browser --target=es2020"
+    "build:client": "esbuild sully-browser-demo.ts --bundle --outfile=dist/sully-browser-demo.js --platform=browser --target=es2020 --format=esm"
   },
   "keywords": [],
   "author": "",
