@@ -1,6 +1,8 @@
 /**
  * Browser-based implementation of Sully AI's WebSocket streaming demo
  */
+import { PCMRecorder } from '@speechmatics/browser-audio-input';
+
 export interface StreamingConfig {
   duration?: number;
   onTranscription?: (text: string) => void;
@@ -19,8 +21,14 @@ interface StreamingToken {
 
 export class SullyStreamingDemo {
   private ws: WebSocket | null = null;
-  private mediaRecorder: MediaRecorder | null = null;
-  private stream: MediaStream | null = null;
+  private pcmRecorder: PCMRecorder | null = null;
+  private audioContext: AudioContext | null = null;
+  private retryCount = 0;
+  private readonly maxRetries = 5;
+  private retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private countdownIntervalId: ReturnType<typeof setInterval> | null = null;
+  private userStopped = false;
+  private streamingToken: { token: string; apiUrl: string; accountId: string } | null = null;
   private config: StreamingConfig;
   private segments: { text: string; isFinal: boolean }[] = [];
   private currentSegmentIndex: number = 0;
@@ -37,6 +45,11 @@ export class SullyStreamingDemo {
    * @returns Promise that resolves when streaming is complete
    */
   async start(): Promise<void> {
+    if (this.pcmRecorder?.isRecording) {
+      console.warn('start() called while already recording — ignoring');
+      return;
+    }
+
     try {
       this.segments = []; // Reset segments
       this.currentSegmentIndex = 0;
@@ -75,12 +88,13 @@ export class SullyStreamingDemo {
         console.log(`Setting auto-stop timer for ${this.config.duration}ms`);
         let remainingTime = Math.floor(this.config.duration / 1000);
 
-        const countdownInterval = setInterval(() => {
+        this.countdownIntervalId = setInterval(() => {
           remainingTime--;
           console.log(`Recording time remaining: ${remainingTime} seconds`);
 
           if (remainingTime <= 0) {
-            clearInterval(countdownInterval);
+            clearInterval(this.countdownIntervalId!);
+            this.countdownIntervalId = null;
             console.log('Auto-stop timer triggered');
             this.stop();
           }
@@ -96,20 +110,32 @@ export class SullyStreamingDemo {
    * Stops the streaming demo and cleans up resources
    */
   stop(): void {
+    this.userStopped = true;
+    if (this.retryTimeoutId) {
+      clearTimeout(this.retryTimeoutId);
+      this.retryTimeoutId = null;
+    }
+    if (this.countdownIntervalId) {
+      clearInterval(this.countdownIntervalId);
+      this.countdownIntervalId = null;
+    }
     console.log('Stopping Sully Streaming Demo...');
     this.config.onStatusChange?.('disconnected');
-    if (this.mediaRecorder) {
-      console.log('Stopping media recorder');
-      this.mediaRecorder.stop();
+
+    if (this.pcmRecorder?.isRecording) {
+      console.log('Stopping PCMRecorder');
+      this.pcmRecorder.stopRecording();
     }
-    if (this.stream) {
-      console.log('Stopping audio tracks');
-      this.stream.getTracks().forEach((track) => track.stop());
+    if (this.audioContext) {
+      this.audioContext.close().catch(() => {});
+      this.audioContext = null;
     }
     if (this.ws) {
       console.log('Closing WebSocket connection');
       this.ws.close();
+      this.ws = null;
     }
+
     console.log('Cleanup complete');
     this.config.onComplete?.();
   }
@@ -140,7 +166,14 @@ export class SullyStreamingDemo {
       .replace('https://', 'wss://')
       .replace('http://', 'ws://');
 
-    const fullUrl = `${wsUrl}/audio/transcriptions/stream?account_id=${accountId}&api_token=${token}`;
+    // linear32 = Float32Array natively from PCMRecorder, no conversion needed
+    const params = new URLSearchParams({
+      sample_rate: '16000',
+      encoding: 'linear32',
+      account_id: accountId,
+      api_token: token,
+    });
+    const fullUrl = `${wsUrl}/audio/transcriptions/stream?${params.toString()}`;
     console.log('Connecting to WebSocket:', wsUrl);
 
     this.ws = new WebSocket(fullUrl);
@@ -208,56 +241,46 @@ export class SullyStreamingDemo {
   }
 
   private async initializeAudioRecording(): Promise<void> {
-    try {
-      console.log('Requesting microphone access...');
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-      console.log('Microphone access granted');
+    // Served from /audio-worklet/ which maps to node_modules/.../dist/
+    const workletUrl = '/audio-worklet/pcm-audio-worklet.min.js';
 
-      this.mediaRecorder = new MediaRecorder(this.stream);
-      console.log('MediaRecorder initialized');
+    this.audioContext = new AudioContext({ sampleRate: 16000 });
 
-      this.mediaRecorder.ondataavailable = async (event) => {
-        console.log(
-          'Received audio chunk',
-          event.data.size,
-          this.ws?.readyState,
-        );
-
-        if (event.data.size > 0 && this.ws?.readyState === WebSocket.OPEN) {
-          console.log(
-            `Processing audio chunk of size: ${event.data.size} bytes`,
-          );
-          // base64 encode the blob
-          function blobToBase64(blob: Blob) {
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onloadend = () =>
-                resolve(reader.result?.toString()?.split(',')[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-          }
-
-          const base64 = await blobToBase64(event.data);
-          console.log('Sending audio chunk to server');
-          this.ws.send(JSON.stringify({ audio: base64 }));
-        }
-      };
-
-      // Start recording with small timeslices for real-time streaming
-      console.log('Starting MediaRecorder with 1s timeslices');
-      this.mediaRecorder.start(1000);
-    } catch (error) {
-      console.error('Error in initializeAudioRecording:', error);
-      this.handleError(error as Error);
+    // sampleRate is a hint, not a guarantee — verify it was respected
+    if (this.audioContext.sampleRate !== 16000) {
+      throw new Error(
+        `AudioContext sample rate is ${this.audioContext.sampleRate}Hz, expected 16000Hz. ` +
+        `Your browser or hardware does not support this rate.`
+      );
     }
+
+    this.pcmRecorder = new PCMRecorder(workletUrl);
+
+    this.pcmRecorder.addEventListener('audio', (event) => {
+      if (this.ws?.readyState !== WebSocket.OPEN) return;
+      // TypedEventTarget types event as InputAudioEvent for the 'audio' key — data is Float32Array
+      const base64 = this.float32ArrayToBase64(event.data);
+      this.ws.send(JSON.stringify({ audio: base64 }));
+    });
+
+    // If StartRecordingOptions has a different shape than { audioContext }, check Task 1 Step 3 result
+    await this.pcmRecorder.startRecording({ audioContext: this.audioContext });
+    console.log('PCMRecorder started');
+  }
+
+  private float32ArrayToBase64(samples: Float32Array): string {
+    const bytes = new Uint8Array(samples.buffer);
+    let binary = '';
+    const chunkSize = 4096;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    return btoa(binary);
   }
 
   private handleError(error: Error): void {
     console.error('Sully Streaming Demo error:', error);
-    this.config.onError?.(error);
-    this.stop();
+    this.stop();           // fires 'disconnected' status first
+    this.config.onError?.(error);  // demo.html then sets final 'error' status
   }
 }
