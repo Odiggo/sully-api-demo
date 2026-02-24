@@ -9,7 +9,7 @@ export interface StreamingConfig {
   onError?: (error: Error) => void;
   onComplete?: () => void;
   onStatusChange?: (
-    status: 'starting' | 'connecting' | 'connected' | 'disconnected' | 'error',
+    status: 'starting' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting',
   ) => void;
 }
 
@@ -50,6 +50,10 @@ export class SullyStreamingDemo {
       return;
     }
 
+    this.userStopped = false;
+    this.retryCount = 0;
+    this.streamingToken = null;
+
     try {
       this.segments = []; // Reset segments
       this.currentSegmentIndex = 0;
@@ -71,6 +75,7 @@ export class SullyStreamingDemo {
 
       const { token, apiUrl, accountId } =
         (await tokenResponse.json()) as StreamingToken;
+      this.streamingToken = { token, apiUrl, accountId };
       console.log('Successfully obtained streaming token');
 
       // Initialize WebSocket connection
@@ -138,6 +143,39 @@ export class SullyStreamingDemo {
 
     console.log('Cleanup complete');
     this.config.onComplete?.();
+  }
+
+  private async reconnect(): Promise<void> {
+    if (this.userStopped) return;
+
+    if (this.retryCount >= this.maxRetries) {
+      this.handleError(new Error(`Lost connection after ${this.maxRetries} reconnect attempts`));
+      return;
+    }
+
+    const delay = Math.min(1000 * 2 ** this.retryCount, 30_000);
+    this.retryCount++;
+    console.log(`Reconnecting in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
+    this.config.onStatusChange?.('reconnecting');
+
+    this.retryTimeoutId = setTimeout(async () => {
+      if (this.userStopped) return;
+      try {
+        // Always re-fetch token — old one may have expired
+        const tokenResponse = await fetch('/streaming-token', { method: 'POST' });
+        if (!tokenResponse.ok) throw new Error('Failed to refresh streaming token');
+        const { token, apiUrl, accountId } = await tokenResponse.json() as { token: string; apiUrl: string; accountId: string };
+        this.streamingToken = { token, apiUrl, accountId };
+
+        await this.initializeWebSocket(token, apiUrl, accountId);
+        this.retryCount = 0;
+        this.config.onStatusChange?.('connected');
+        console.log('Reconnected successfully');
+      } catch (err) {
+        console.error('Reconnect attempt failed:', err);
+        await this.reconnect();
+      }
+    }, delay);
   }
 
   private updateSegments(text: string, isFinal: boolean): void {
@@ -236,7 +274,7 @@ export class SullyStreamingDemo {
     this.ws.onclose = () => {
       console.log('WebSocket connection closed');
       if (!this.userStopped) {
-        this.stop();
+        this.reconnect();
       }
     };
 
