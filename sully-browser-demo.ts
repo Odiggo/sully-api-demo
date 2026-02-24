@@ -180,16 +180,19 @@ export class SullyStreamingDemo {
 
     // Wait for connection to be established and confirmed
     await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('WebSocket connection timed out')), 10_000);
       if (!this.ws) return reject(new Error('WebSocket not initialized'));
 
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'status' && data.status === 'connected') {
+            clearTimeout(timeout);
             console.log('WebSocket connection confirmed');
             resolve();
           }
         } catch (error) {
+          clearTimeout(timeout);
           console.error('Error parsing WebSocket message:', error);
           reject(new Error('Failed to parse WebSocket message'));
         }
@@ -199,6 +202,7 @@ export class SullyStreamingDemo {
         console.log('WebSocket connection established');
       };
       this.ws.onerror = (error) => {
+        clearTimeout(timeout);
         console.error('WebSocket error:', error);
         reject(new Error('WebSocket connection failed'));
       };
@@ -213,7 +217,6 @@ export class SullyStreamingDemo {
           console.log('Received status message:', data);
           if (data.status === 'disconnected') {
             console.log('Server initiated disconnection');
-            this.config.onStatusChange?.('disconnected');
             this.stop();
             return;
           }
@@ -232,7 +235,9 @@ export class SullyStreamingDemo {
 
     this.ws.onclose = () => {
       console.log('WebSocket connection closed');
-      this.stop();
+      if (!this.userStopped) {
+        this.stop();
+      }
     };
 
     this.ws.onerror = (error) => {
