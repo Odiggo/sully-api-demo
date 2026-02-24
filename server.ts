@@ -17,6 +17,11 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
+app.use((req, _res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
 // Get the root directory (one level up from dist)
 const rootDir = path.join(__dirname, '..');
 
