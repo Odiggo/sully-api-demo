@@ -47,11 +47,16 @@ SULLY_ACCOUNT_ID=your_account_id_here
 
 ### 🎯 Running the Demos
 
+#### Browser-Based Demo (Default)
+```bash
+# Start the web server — browser opens automatically
+npm start
+```
+
 #### File Transcription & Note Generation Demo
 ```bash
 # Basic demo with default sample audio file
-npm run start
-# or: npx tsx sully-demo.ts note
+npm run start:note
 
 # With custom audio file
 npx tsx sully-demo.ts note /path/to/your/audio.wav
@@ -60,21 +65,13 @@ npx tsx sully-demo.ts note /path/to/your/audio.wav
 #### Live Audio Streaming Demo
 ```bash
 # Server-side streaming (10-second default)
-npx tsx sully-demo.ts stream
+npm run start:stream
 
 # Client-side streaming with custom duration
 npx tsx sully-demo.ts stream -m client -d 20
 
 # With specific language
 npx tsx sully-demo.ts stream -l en-US -d 15
-```
-
-#### Browser-Based Demo
-```bash
-# Start the web server
-npm run start:browser
-
-# Then open http://localhost:3000 in your browser
 ```
 
 ### 📋 Demo Workflow
@@ -113,8 +110,8 @@ The script demonstrates three main Sully API capabilities:
 - Accessible at `http://localhost:3000` after starting the server
 
 To use the browser demo:
-1. Start the server: `npm run start:browser`
-2. Open `http://localhost:3000` in your browser
+1. Start the server: `npm start`
+2. Browser opens automatically at `http://localhost:3000`
 3. Click "Start Recording" to begin streaming
 4. Grant microphone permissions when prompted
 5. Speak into your microphone to see real-time transcription
@@ -236,8 +233,9 @@ sully-api-demo/
 ```
 
 ### 🔧 Available Scripts
-- `npm run start` - Run the file transcription demo with default audio
-- `npm run start:browser` - Start the web server for browser demo
+- `npm start` - Build and launch the browser demo (opens automatically)
+- `npm run start:note` - Run the file transcription & note generation demo
+- `npm run start:stream` - Run the live audio streaming demo
 - `npm test` - Run tests (placeholder)
 
 ### 🎵 Supported Audio Formats
