@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@speechmatics/browser-audio-input": "^2.0.3",
     "@types/node": "^22.9.0",
     "@types/ws": "^8.5.13",
     "commander": "^12.1.0",
@@ -28,6 +29,7 @@
     "@types/express": "^5.0.0",
     "@types/node-fetch": "^2.6.12",
     "@types/node-microphone": "^0.1.4",
+    "esbuild": "^0.27.3",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.2"
   }
