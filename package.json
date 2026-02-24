@@ -7,7 +7,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node sully-demo.ts note",
-    "start:browser": "tsc -p tsconfig.browser.json && node ./dist/server.js"
+    "build:server": "tsc -p tsconfig.browser.json",
+    "build:client": "esbuild sully-browser-demo.ts --bundle --outfile=dist/sully-browser-demo.js --platform=browser --target=es2020",
+    "start:browser": "npm run build:client && npm run build:server && node ./dist/server.js"
   },
   "keywords": [],
   "author": "",
