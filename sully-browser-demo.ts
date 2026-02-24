@@ -164,11 +164,14 @@ export class SullyStreamingDemo {
         // Always re-fetch token — old one may have expired
         const tokenResponse = await fetch('/streaming-token', { method: 'POST' });
         if (!tokenResponse.ok) throw new Error('Failed to refresh streaming token');
-        const { token, apiUrl, accountId } = await tokenResponse.json() as { token: string; apiUrl: string; accountId: string };
+        const data = await tokenResponse.json() as { token?: string; apiUrl?: string; accountId?: string };
+        if (!data.token || !data.apiUrl || !data.accountId) {
+          throw new Error('Invalid token response: missing required fields');
+        }
+        const { token, apiUrl, accountId } = data as { token: string; apiUrl: string; accountId: string };
         this.streamingToken = { token, apiUrl, accountId };
 
         await this.initializeWebSocket(token, apiUrl, accountId);
-        this.retryCount = 0;
         this.config.onStatusChange?.('connected');
         console.log('Reconnected successfully');
       } catch (err) {
