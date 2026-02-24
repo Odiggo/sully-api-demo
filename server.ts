@@ -1,6 +1,7 @@
 /**
  * Simple Express server to serve the Sully AI browser demo
  */
+import { execFile } from 'child_process';
 import dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
@@ -89,6 +90,13 @@ app.use(
 
 // Start the server
 app.listen(port, () => {
+  const url = `http://localhost:${port}`;
+  if (process.platform === 'win32') {
+    execFile('cmd.exe', ['/c', 'start', url]);
+  } else {
+    execFile(process.platform === 'darwin' ? 'open' : 'xdg-open', [url]);
+  }
+
   console.log(`🚀 Server running at http://localhost:${port}`);
   console.log('📋 Available routes:');
   console.log(`   - http://localhost:${port}/ (Demo page)`);
