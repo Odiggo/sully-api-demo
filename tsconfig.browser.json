@@ -10,6 +10,6 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node"
   },
-  "include": ["server.ts", "sully-browser-demo.ts"],
-  "exclude": ["node_modules", "sully-demo.ts"]
+  "include": ["server.ts"],
+  "exclude": ["node_modules", "sully-demo.ts", "sully-browser-demo.ts"]
 }

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2020", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "bundler"
+  },
+  "include": ["sully-browser-demo.ts"],
+  "exclude": ["node_modules"]
+}
