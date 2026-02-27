@@ -96,6 +96,13 @@
             gap: 14px;
         }
 
+        .logo-img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
         .logo-word {
             font-size: 21px;
             font-weight: 800;
@@ -566,7 +573,8 @@
         <!-- ── Header ──────────────────────────────────────────── -->
         <header class="header">
             <div class="logo">
-                <div class="logo-word">sully<span class="logo-accent">.</span></div>
+                <img class="logo-img" src="logo-192x192.png" alt="Sully logo">
+                <div class="logo-word">Sully.ai</div>
                 <div class="logo-sep"></div>
                 <div class="logo-sub">streaming demo</div>
             </div>
@@ -681,7 +689,7 @@
 
         <!-- ── Footer ──────────────────────────────────────────── -->
         <footer class="footer">
-            <span>sully ai · realtime medical transcription</span>
+            <span>sully.ai · realtime medical transcription</span>
             <span id="sessionId">—</span>
         </footer>
 
