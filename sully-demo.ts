@@ -8,6 +8,8 @@ import fetch from 'node-fetch';
 import mic from 'node-microphone'; // For microphone access
 import WebSocket from 'ws'; // For real-time audio streaming
 
+import { buildStreamingWebSocketUrl } from './streaming-client.js';
+
 // Load environment variables from .env file
 dotenv.config();
 
@@ -272,31 +274,23 @@ async function demonstrateStreaming({
     token = tokenReq.data.token;
   }
 
-  // Convert HTTP/HTTPS URL to WebSocket URL
-  const baseWsUrl =
-    SULLY_API_URL.replace('https://', 'wss://').replace('http://', 'ws://') +
-    '/v1/audio/transcriptions/stream';
-
-  // Build query parameters
-  const params = new URLSearchParams({
-    sample_rate: '16000',
+  // Build the shared streaming URL once so CLI and browser stay in sync.
+  const streamConnectionParams = {
+    apiUrl: `${SULLY_API_URL}/v1`,
+    sampleRate: 16000,
     encoding: 'linear16',
+    dictation: true,
+    language,
+  } as const;
+
+  const wsUrl = buildStreamingWebSocketUrl({
+    ...streamConnectionParams,
+    accountId: token ? ACCOUNT_ID : undefined,
+    apiToken: token,
   });
+  const loggedWsUrl = buildStreamingWebSocketUrl(streamConnectionParams);
 
-  // Add language parameter if provided
-  if (language) {
-    params.append('language', language);
-  }
-
-  // Add authentication parameters for client mode
-  if (token) {
-    params.append('account_id', ACCOUNT_ID);
-    params.append('api_token', token);
-  }
-
-  const wsUrl = `${baseWsUrl}?${params.toString()}`;
-
-  logger.info(`Connecting to WebSocket: ${wsUrl}`);
+  logger.info(`Connecting to WebSocket: ${loggedWsUrl}`);
 
   return new Promise((resolve, reject) => {
     try {
