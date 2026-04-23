@@ -3,6 +3,12 @@
  */
 import { PCMRecorder } from '@speechmatics/browser-audio-input';
 
+import {
+  buildStreamingWebSocketUrl,
+  parseStreamingTokenResponse,
+  type StreamingToken,
+} from './streaming-client.js';
+
 export interface StreamingConfig {
   duration?: number;
   onTranscription?: (text: string) => void;
@@ -13,11 +19,8 @@ export interface StreamingConfig {
   ) => void;
 }
 
-interface StreamingToken {
-  token: string;
-  apiUrl: string;
-  accountId: string;
-}
+const toError = ({ value }: { value: unknown }): Error =>
+  value instanceof Error ? value : new Error(String(value));
 
 export class SullyStreamingDemo {
   private ws: WebSocket | null = null;
@@ -28,7 +31,6 @@ export class SullyStreamingDemo {
   private retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private countdownIntervalId: ReturnType<typeof setInterval> | null = null;
   private userStopped = false;
-  private streamingToken: { token: string; apiUrl: string; accountId: string } | null = null;
   private config: StreamingConfig;
   private segments: { text: string; isFinal: boolean }[] = [];
   private currentSegmentIndex: number = 0;
@@ -52,7 +54,6 @@ export class SullyStreamingDemo {
 
     this.userStopped = false;
     this.retryCount = 0;
-    this.streamingToken = null;
 
     try {
       this.segments = []; // Reset segments
@@ -61,21 +62,7 @@ export class SullyStreamingDemo {
       this.config.onStatusChange?.('starting');
       // Get streaming token from server
       console.log('Requesting streaming token from server...');
-      const tokenResponse = await fetch('/streaming-token', {
-        method: 'POST',
-      });
-
-      if (!tokenResponse.ok) {
-        console.error(
-          `Token request failed with status: ${tokenResponse.status}`,
-        );
-        this.config.onStatusChange?.('error');
-        throw new Error('Failed to get streaming token');
-      }
-
-      const { token, apiUrl, accountId } =
-        (await tokenResponse.json()) as StreamingToken;
-      this.streamingToken = { token, apiUrl, accountId };
+      const { token, apiUrl, accountId } = await this.fetchStreamingToken();
       console.log('Successfully obtained streaming token');
 
       // Initialize WebSocket connection
@@ -107,7 +94,7 @@ export class SullyStreamingDemo {
       }
     } catch (error) {
       console.error('Error in start():', error);
-      this.handleError(error as Error);
+      this.handleError(toError({ value: error }));
     }
   }
 
@@ -162,14 +149,7 @@ export class SullyStreamingDemo {
       if (this.userStopped) return;
       try {
         // Always re-fetch token — old one may have expired
-        const tokenResponse = await fetch('/streaming-token', { method: 'POST' });
-        if (!tokenResponse.ok) throw new Error('Failed to refresh streaming token');
-        const data = await tokenResponse.json() as { token?: string; apiUrl?: string; accountId?: string };
-        if (!data.token || !data.apiUrl || !data.accountId) {
-          throw new Error('Invalid token response: missing required fields');
-        }
-        const { token, apiUrl, accountId } = data as { token: string; apiUrl: string; accountId: string };
-        this.streamingToken = { token, apiUrl, accountId };
+        const { token, apiUrl, accountId } = await this.fetchStreamingToken();
 
         await this.initializeWebSocket(token, apiUrl, accountId);
         this.config.onStatusChange?.('connected');
@@ -203,19 +183,21 @@ export class SullyStreamingDemo {
     apiUrl: string,
     accountId: string,
   ): Promise<void> {
-    const wsUrl = apiUrl
-      .replace('https://', 'wss://')
-      .replace('http://', 'ws://');
-
-    // linear32 = Float32Array natively from PCMRecorder, no conversion needed
-    const params = new URLSearchParams({
-      sample_rate: '16000',
+    const fullUrl = buildStreamingWebSocketUrl({
+      apiUrl,
+      sampleRate: 16000,
       encoding: 'linear32',
-      account_id: accountId,
-      api_token: token,
+      dictation: true,
+      accountId,
+      apiToken: token,
     });
-    const fullUrl = `${wsUrl}/audio/transcriptions/stream?${params.toString()}`;
-    console.log('Connecting to WebSocket:', wsUrl);
+    const loggedUrl = buildStreamingWebSocketUrl({
+      apiUrl,
+      sampleRate: 16000,
+      encoding: 'linear32',
+      dictation: true,
+    });
+    console.log('Connecting to WebSocket:', loggedUrl);
 
     this.ws = new WebSocket(fullUrl);
 
@@ -270,7 +252,7 @@ export class SullyStreamingDemo {
         }
       } catch (error) {
         console.error('Error parsing transcription message:', error);
-        this.handleError(error as Error);
+        this.handleError(toError({ value: error }));
       }
     };
 
@@ -322,6 +304,22 @@ export class SullyStreamingDemo {
       binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
     }
     return btoa(binary);
+  }
+
+  private async fetchStreamingToken(): Promise<StreamingToken> {
+    const tokenResponse = await fetch('/streaming-token', {
+      method: 'POST',
+    });
+
+    if (!tokenResponse.ok) {
+      throw new Error(
+        `Failed to get streaming token (${tokenResponse.status})`,
+      );
+    }
+
+    return parseStreamingTokenResponse({
+      value: await tokenResponse.json(),
+    });
   }
 
   private handleError(error: Error): void {
