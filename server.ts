@@ -17,6 +17,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
+app.use(express.json());
+
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
@@ -38,6 +40,18 @@ app.use(
   ),
 );
 
+app.get('/health', (_req: express.Request, res: express.Response) => {
+  const hasApiKey = Boolean(process.env.SULLY_API_KEY);
+  const hasAccountId = Boolean(process.env.SULLY_ACCOUNT_ID);
+  const hasApiUrl = Boolean(process.env.SULLY_API_URL);
+  res.json({
+    ok: hasApiKey && hasAccountId && hasApiUrl,
+    hasApiKey,
+    hasAccountId,
+    hasApiUrl,
+  });
+});
+
 // Serve the demo page at the root URL
 app.get('/', (req: express.Request, res: express.Response) => {
   const htmlPath = path.join(rootDir, 'demo.html');
@@ -45,7 +59,19 @@ app.get('/', (req: express.Request, res: express.Response) => {
   res.sendFile(htmlPath);
 });
 
-// Remove the api-config endpoint and add a token endpoint
+function resolveTokenExpiresIn(value: unknown): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number.parseInt(value, 10)
+        : NaN;
+  if (!Number.isFinite(parsed)) {
+    return 3600;
+  }
+  return Math.min(604_800, Math.max(60, Math.floor(parsed)));
+}
+
 app.post(
   '/streaming-token',
   async (req: express.Request, res: express.Response) => {
@@ -59,7 +85,9 @@ app.post(
             'X-Api-Key': process.env.SULLY_API_KEY || '',
             'X-Account-Id': process.env.SULLY_ACCOUNT_ID || '',
           },
-          body: JSON.stringify({ expiresIn: 60 }),
+          body: JSON.stringify({
+            expiresIn: resolveTokenExpiresIn(req.body?.expiresIn),
+          }),
         },
       );
 
@@ -105,6 +133,7 @@ app.listen(port, () => {
   console.log(`🚀 Server running at http://localhost:${port}`);
   console.log('📋 Available routes:');
   console.log(`   - http://localhost:${port}/ (Demo page)`);
+  console.log(`   - http://localhost:${port}/health (Setup check)`);
   console.log(
     `   - http://localhost:${port}/dist/sully-browser-demo.js (Browser client)`,
   );
