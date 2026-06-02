@@ -53,6 +53,29 @@ SULLY_ACCOUNT_ID=your_account_id_here
 npm start
 ```
 
+Before recording, configure:
+
+- **Language** — filterable list; tags from [supported languages](https://docs.sully.ai/api-reference/audio-transcriptions/languages) (including `multi`)
+- **Session duration** — manual stop, or auto-stop at 30s / 1m / 5m
+- **Dictation formatting** — sends `dictation=true` on the WebSocket
+- **Word debug** — optional table of word timings/confidence from the API
+
+**Session flow:** Click record → *initializing* (token) → *connecting* (WebSocket) → *live* (mic + transcript). The timer runs only while live. **Space** toggles record when focus is not in a form field.
+
+**Transcript:** Italic = interim · solid = finalized. **Copy** exports text; **New session** clears transcript and event log.
+
+Settings persist in `localStorage`. On load, `GET /health` checks `.env` and shows a setup banner if credentials are missing.
+
+### Browser demo troubleshooting
+
+| Symptom | What to try |
+|--------|-------------|
+| Setup banner on load | Set `SULLY_API_KEY`, `SULLY_ACCOUNT_ID`, `SULLY_API_URL` in `.env` and restart `pnpm start` |
+| Mic denied | Allow microphone for `localhost` in browser settings |
+| No transcript while “live” | Confirm status pill is *connected*; check event log for `ERROR` |
+| Connection lost banner | Network blip — demo retries up to 5 times; start a new session if it fails |
+| 16 kHz error | Use Chrome or close other apps using the microphone |
+
 #### File Transcription & Note Generation Demo
 ```bash
 # Basic demo with default sample audio file
@@ -110,12 +133,13 @@ The script demonstrates three main Sully API capabilities:
 - Accessible at `http://localhost:3000` after starting the server
 
 To use the browser demo:
-1. Start the server: `npm start`
-2. Browser opens automatically at `http://localhost:3000`
-3. Click "Start Recording" to begin streaming
-4. Grant microphone permissions when prompted
-5. Speak into your microphone to see real-time transcription
-6. Click "Stop Recording" to end the session
+1. Start the server: `pnpm start`
+2. Browser opens at `http://localhost:3000`
+3. Confirm there is no setup banner (`http://localhost:3000/health` should report `"ok": true`)
+4. Choose language, duration, and options; click **record**
+5. Grant microphone permission when prompted
+6. Speak — interim text appears italic; finalized phrases turn solid
+7. Click **stop**, wait for auto-stop, or press **Space** to end/start
 
 ### 📊 Example Output
 
