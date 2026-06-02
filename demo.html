@@ -369,6 +369,196 @@
             text-align: center;
         }
 
+        .stream-settings {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+            width: min(100%, 340px);
+        }
+
+        .field-label {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--t3);
+            text-align: center;
+        }
+
+        .stream-select {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--b2);
+            background: var(--s2);
+            color: var(--t1);
+            font-family: var(--mono);
+            font-size: 12px;
+            cursor: pointer;
+            transition: border-color 0.2s ease, opacity 0.2s ease;
+        }
+
+        .stream-select:hover:not(:disabled) { border-color: var(--teal-b); }
+        .stream-select:focus {
+            outline: none;
+            border-color: var(--teal);
+            box-shadow: 0 0 0 2px var(--teal-glow);
+        }
+
+        .stream-select:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .dictation-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--b2);
+            background: var(--s2);
+            cursor: pointer;
+            transition: border-color 0.2s ease, opacity 0.2s ease;
+        }
+
+        .dictation-toggle:hover:not(:has(input:disabled)) { border-color: var(--teal-b); }
+        .dictation-toggle:has(input:disabled) {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .dictation-toggle input {
+            accent-color: var(--teal);
+            cursor: inherit;
+        }
+
+        .dictation-toggle span {
+            font-family: var(--mono);
+            font-size: 12px;
+            color: var(--t2);
+        }
+
+        .tx-final { color: var(--t1); }
+        .tx-interim {
+            color: var(--t3);
+            font-style: italic;
+        }
+
+        .tx-legend {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--t3);
+            letter-spacing: 0.04em;
+        }
+
+        .field-hint {
+            font-family: var(--mono);
+            font-size: 10px;
+            color: var(--t3);
+            text-align: center;
+            line-height: 1.45;
+        }
+
+        .setup-banner,
+        .alert-banner {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: var(--mono);
+            font-size: 11px;
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .setup-banner {
+            background: var(--amber-glow);
+            border: 1px solid var(--amber-b);
+            color: var(--amber);
+        }
+
+        .alert-banner {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            background: var(--red-glow);
+            border: 1px solid var(--red-b);
+            color: var(--red);
+        }
+
+        .alert-banner button {
+            background: transparent;
+            border: 1px solid var(--red-b);
+            color: var(--red);
+            border-radius: 4px;
+            padding: 2px 8px;
+            cursor: pointer;
+            font-family: var(--mono);
+            font-size: 10px;
+        }
+
+        .chip.live.config { color: var(--teal); border-color: var(--teal-b); }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .panel-btn {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 5px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--b2);
+            background: var(--s2);
+            color: var(--t2);
+            cursor: pointer;
+        }
+
+        .panel-btn:hover:not(:disabled) { border-color: var(--teal-b); color: var(--t1); }
+        .panel-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .word-debug {
+            border-top: 1px solid var(--b1);
+            padding: 12px 18px 16px;
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--t2);
+        }
+
+        .word-debug table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .word-debug th,
+        .word-debug td {
+            text-align: left;
+            padding: 4px 6px;
+            border-bottom: 1px solid var(--b1);
+        }
+
+        .rec-btn:focus-visible {
+            outline: 2px solid var(--teal);
+            outline-offset: 3px;
+        }
+
+        .w-bar {
+            transition: height 0.08s ease;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .ring.pulse,
+            .cursor,
+            .w-bar { animation: none; transition: none; }
+        }
+
         /* ── Transcript ──────────────────────────────────────── */
         .tx-body {
             flex: 1;
@@ -509,6 +699,9 @@
         .ev-tag.TRANSCRIPT { background: var(--teal-glow);  color: var(--teal);  }
         .ev-tag.ERROR      { background: var(--red-glow);   color: var(--red);   }
         .ev-tag.COMPLETE   { background: var(--blue-glow);  color: var(--blue);  }
+        .ev-tag.CONFIG,
+        .ev-tag.LANGUAGE,
+        .ev-tag.ACTION   { background: var(--s2); color: var(--t2); border: 1px solid var(--b2); }
 
         .ev-ts { color: var(--t3); font-size: 10px; }
 
@@ -562,13 +755,20 @@
         @media (max-width: 600px) {
             .app { padding: 0 16px 32px; }
             .right-col { flex-direction: column; }
-            .chip { display: none; }
+            .header-right { flex-wrap: wrap; justify-content: flex-end; }
+            .chip { font-size: 9px; padding: 4px 8px; }
         }
     </style>
 </head>
 
 <body>
     <div class="app">
+
+        <div class="setup-banner" id="setupBanner" hidden></div>
+        <div class="alert-banner" id="alertBanner" hidden>
+            <span id="alertBannerText"></span>
+            <button type="button" id="alertBannerDismiss">dismiss</button>
+        </div>
 
         <!-- ── Header ──────────────────────────────────────────── -->
         <header class="header">
@@ -579,6 +779,7 @@
                 <div class="logo-sub">streaming demo</div>
             </div>
             <div class="header-right">
+                <div class="chip config" id="configChip">—</div>
                 <div class="chip" id="wordChip">0 words</div>
                 <div class="chip" id="durationChip">00:00</div>
                 <div class="status-pill disconnected" id="statusPill">
@@ -600,7 +801,7 @@
                         <div class="btn-wrap">
                             <div class="ring" id="ring1"></div>
                             <div class="ring" id="ring2"></div>
-                            <button class="rec-btn" id="recBtn">
+                            <button class="rec-btn" id="recBtn" type="button" aria-pressed="false" aria-busy="false" aria-label="Start or stop recording">
                                 <!-- Mic icon (default) -->
                                 <svg id="micIco" class="btn-ico" width="28" height="28" viewBox="0 0 24 24"
                                      fill="none" stroke="currentColor" stroke-width="1.5"
@@ -631,6 +832,32 @@
                             <div class="w-bar"></div>
                         </div>
 
+                        <div class="stream-settings">
+                            <div>
+                                <label class="field-label" for="languageFilter">transcription language</label>
+                                <input class="stream-select" id="languageFilter" type="search" placeholder="Filter languages…" aria-label="Filter languages">
+                                <select class="stream-select" id="languageSelect" aria-label="Transcription language" style="margin-top:8px"></select>
+                            </div>
+                            <div>
+                                <label class="field-label" for="durationSelect">session duration</label>
+                                <select class="stream-select" id="durationSelect" aria-label="Session duration">
+                                    <option value="0">Manual — stop when ready</option>
+                                    <option value="30">30 seconds</option>
+                                    <option value="60">1 minute</option>
+                                    <option value="300">5 minutes</option>
+                                </select>
+                            </div>
+                            <label class="dictation-toggle" for="dictationCheck" title="Formats output for dictation workflows (punctuation and casing).">
+                                <input type="checkbox" id="dictationCheck">
+                                <span>Dictation formatting</span>
+                            </label>
+                            <p class="field-hint">Dictation applies punctuation and casing suited to spoken clinical dictation.</p>
+                            <label class="dictation-toggle" for="wordDebugCheck">
+                                <input type="checkbox" id="wordDebugCheck">
+                                <span>Show word debug</span>
+                            </label>
+                        </div>
+
                         <div class="rec-hint" id="recHint">Click to start recording your microphone</div>
                     </div>
                 </div>
@@ -642,12 +869,30 @@
                             <div class="panel-dot" id="txDot"></div>
                             live transcript
                         </div>
-                        <div class="panel-info" id="txMeta">—</div>
+                        <div class="panel-info">
+                            <span class="tx-legend">Italic = in progress · solid = finalized</span>
+                            <span id="txMeta"> — </span>
+                        </div>
                     </div>
-                    <div class="tx-body" id="txBody">
+                    <div class="panel-head" style="border-top:1px solid var(--b1); border-bottom:none; padding-top:10px;">
+                        <div class="panel-actions">
+                            <button type="button" class="panel-btn" id="copyBtn" disabled>Copy</button>
+                            <button type="button" class="panel-btn" id="newSessionBtn">New session</button>
+                        </div>
+                    </div>
+                    <div class="tx-body" id="txBody" aria-live="polite" aria-atomic="false">
                         <span class="tx-placeholder" id="txPlaceholder">
                             Transcript will appear here once recording begins...
                         </span>
+                    </div>
+                    <div class="word-debug" id="wordDebugPanel" hidden>
+                        <strong>Word debug</strong>
+                        <table>
+                            <thead>
+                                <tr><th>word</th><th>start</th><th>end</th><th>conf</th></tr>
+                            </thead>
+                            <tbody id="wordDebugBody"></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -677,7 +922,10 @@
                             <div class="panel-dot" id="evDot"></div>
                             event log
                         </div>
-                        <div class="panel-info" id="evCount">—</div>
+                        <div class="panel-info panel-actions">
+                            <span id="evCount">—</span>
+                            <button type="button" class="panel-btn" id="clearLogBtn">Clear</button>
+                        </div>
                     </div>
                     <div class="event-body" id="evList">
                         <div class="ev-empty">SDK events will appear here</div>
@@ -689,261 +937,12 @@
 
         <!-- ── Footer ──────────────────────────────────────────── -->
         <footer class="footer">
-            <span>sully.ai · realtime medical transcription</span>
+            <span>sully.ai · realtime medical transcription · <a href="https://docs.sully.ai/api-reference/audio-transcriptions/streaming" target="_blank" rel="noopener noreferrer" style="color:var(--t2)">API docs</a></span>
             <span id="sessionId">—</span>
         </footer>
 
     </div>
 
-    <script type="module">
-        import { SullyStreamingDemo } from './dist/sully-browser-demo.js';
-
-        // ── DOM refs ──────────────────────────────────────────────
-        const recBtn   = document.getElementById('recBtn');
-        const micIco   = document.getElementById('micIco');
-        const stopIco  = document.getElementById('stopIco');
-        const btnLbl   = document.getElementById('btnLbl');
-        const ring1    = document.getElementById('ring1');
-        const ring2    = document.getElementById('ring2');
-        const waveform = document.getElementById('waveform');
-        const recHint  = document.getElementById('recHint');
-
-        const statusPill = document.getElementById('statusPill');
-        const statusText = document.getElementById('statusText');
-
-        const txBody        = document.getElementById('txBody');
-        const txPlaceholder = document.getElementById('txPlaceholder');
-        const txDot         = document.getElementById('txDot');
-        const txMeta        = document.getElementById('txMeta');
-
-        const histList  = document.getElementById('histList');
-        const histCount = document.getElementById('histCount');
-        const histDot   = document.getElementById('histDot');
-
-        const evList  = document.getElementById('evList');
-        const evCount = document.getElementById('evCount');
-        const evDot   = document.getElementById('evDot');
-
-        const wordChip     = document.getElementById('wordChip');
-        const durationChip = document.getElementById('durationChip');
-
-        // ── State ─────────────────────────────────────────────────
-        let isRecording      = false;
-        let cursorEl         = null;
-        let wordCount        = 0;
-        let lastLoggedWords  = -1;
-        let historyTotal     = 0;
-        let evTotal          = 0;
-        let startTime        = null;
-        let durationTimer    = null;
-
-        document.getElementById('sessionId').textContent =
-            'session:' + Math.random().toString(36).slice(2, 10);
-
-        const STATUS_LABEL = {
-            starting:     'initializing',
-            connecting:   'connecting',
-            connected:    'connected',
-            disconnected: 'disconnected',
-            error:        'error',
-            reconnecting: 'reconnecting',
-        };
-
-        function ts() {
-            return new Date().toTimeString().slice(0, 8);
-        }
-
-        // ── Status pill ───────────────────────────────────────────
-        function setStatus(status) {
-            statusPill.className = `status-pill ${status}`;
-            statusText.textContent = STATUS_LABEL[status] || status;
-        }
-
-        // ── History panel — DOM-safe construction ─────────────────
-        function pushHistory(status) {
-            histList.querySelector('.empty-state')?.remove();
-
-            const row = document.createElement('div');
-            row.className = 'h-row';
-
-            const dot = document.createElement('div');
-            dot.className = `h-dot ${status}`;
-
-            const label = document.createElement('span');
-            label.className = 'h-label';
-            label.textContent = STATUS_LABEL[status] || status;
-
-            const time = document.createElement('span');
-            time.className = 'h-ts';
-            time.textContent = ts();
-
-            row.append(dot, label, time);
-            histList.insertBefore(row, histList.firstChild);
-
-            historyTotal++;
-            histCount.textContent = `${historyTotal} event${historyTotal !== 1 ? 's' : ''}`;
-            histDot.classList.add('on');
-        }
-
-        // ── Event log — DOM-safe construction ────────────────────
-        // mainText  = prominent text (shown as ev-data-em)
-        // asideText = optional dim trailing detail
-        function pushEvent(type, mainText, asideText) {
-            evList.querySelector('.ev-empty')?.remove();
-
-            const row = document.createElement('div');
-            row.className = 'ev-row';
-
-            const head = document.createElement('div');
-            head.className = 'ev-head';
-
-            const tag = document.createElement('span');
-            tag.className = `ev-tag ${type}`;
-            tag.textContent = type;
-
-            const time = document.createElement('span');
-            time.className = 'ev-ts';
-            time.textContent = ts();
-
-            head.append(tag, time);
-
-            const data = document.createElement('div');
-            data.className = 'ev-data';
-
-            const em = document.createElement('span');
-            em.className = 'ev-data-em';
-            em.textContent = mainText;
-            data.appendChild(em);
-
-            if (asideText) {
-                const aside = document.createElement('span');
-                aside.className = 'ev-data-aside';
-                aside.textContent = ' · ' + asideText;
-                data.appendChild(aside);
-            }
-
-            row.append(head, data);
-            evList.appendChild(row);
-            evList.scrollTop = evList.scrollHeight;
-
-            evTotal++;
-            evCount.textContent = `${evTotal} event${evTotal !== 1 ? 's' : ''}`;
-            evDot.classList.add('on');
-        }
-
-        // ── Recording state toggle ────────────────────────────────
-        function setRecording(on) {
-            isRecording = on;
-
-            if (on) {
-                recBtn.classList.add('recording');
-                ring1.classList.add('pulse');
-                ring2.classList.add('pulse');
-                waveform.classList.add('on');
-                micIco.style.display  = 'none';
-                stopIco.style.display = '';
-                btnLbl.textContent = 'stop';
-                recHint.textContent = 'Recording — click to stop';
-
-                txBody.innerHTML = '';
-                cursorEl = document.createElement('span');
-                cursorEl.className = 'cursor';
-                txBody.appendChild(cursorEl);
-                txDot.classList.add('on');
-                txMeta.textContent = 'recording…';
-
-                startTime = Date.now();
-                durationTimer = setInterval(() => {
-                    const s  = Math.floor((Date.now() - startTime) / 1000);
-                    const mm = String(Math.floor(s / 60)).padStart(2, '0');
-                    const ss = String(s % 60).padStart(2, '0');
-                    durationChip.textContent = `${mm}:${ss}`;
-                    durationChip.classList.add('live');
-                }, 1000);
-
-                wordChip.classList.add('live');
-
-            } else {
-                recBtn.classList.remove('recording');
-                ring1.classList.remove('pulse');
-                ring2.classList.remove('pulse');
-                waveform.classList.remove('on');
-                micIco.style.display  = '';
-                stopIco.style.display = 'none';
-                btnLbl.textContent = 'record';
-                recHint.textContent = 'Click to start recording your microphone';
-                txDot.classList.remove('on');
-
-                if (cursorEl?.parentNode) {
-                    cursorEl.parentNode.removeChild(cursorEl);
-                    cursorEl = null;
-                }
-
-                if (!txBody.textContent.trim()) {
-                    txBody.textContent = '';
-                    txBody.appendChild(txPlaceholder);
-                }
-
-                txMeta.textContent = wordCount > 0 ? `${wordCount} words` : '—';
-
-                clearInterval(durationTimer);
-                durationTimer = null;
-            }
-        }
-
-        // ── SDK ───────────────────────────────────────────────────
-        const demo = new SullyStreamingDemo({
-            onTranscription: (text) => {
-                if (cursorEl?.parentNode) cursorEl.parentNode.removeChild(cursorEl);
-                txBody.textContent = text;
-                if (cursorEl) txBody.appendChild(cursorEl);
-
-                wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-                wordChip.textContent = `${wordCount} words`;
-                txMeta.textContent   = `${wordCount} words`;
-
-                // Log only when new words are recognised (avoids flooding)
-                if (wordCount !== lastLoggedWords) {
-                    lastLoggedWords = wordCount;
-                    const preview = text.length > 72 ? text.slice(0, 72) + '…' : text;
-                    pushEvent('TRANSCRIPT', `"${preview}"`, `${wordCount}w`);
-                }
-            },
-
-            onError: (error) => {
-                pushEvent('ERROR', error.message);
-                setStatus('error');
-                setRecording(false);
-            },
-
-            onComplete: () => {
-                pushEvent('COMPLETE', 'Stream ended cleanly');
-                setRecording(false);
-            },
-
-            onStatusChange: (status) => {
-                setStatus(status);
-                pushHistory(status);
-                pushEvent('STATUS', STATUS_LABEL[status] || status);
-            },
-        });
-
-        // ── Button ────────────────────────────────────────────────
-        recBtn.onclick = async () => {
-            if (!isRecording) {
-                wordCount       = 0;
-                lastLoggedWords = -1;
-                wordChip.textContent = '0 words';
-                setRecording(true);
-                await demo.start();
-            } else {
-                demo.stop();
-                setRecording(false);
-            }
-        };
-
-        // ── Init ──────────────────────────────────────────────────
-        setStatus('disconnected');
-    </script>
+    <script type="module" src="./dist/demo-app.js"></script>
 </body>
 </html>
