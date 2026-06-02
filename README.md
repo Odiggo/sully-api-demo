@@ -55,7 +55,7 @@ npm start
 
 Before recording, configure:
 
-- **Language** — filterable list; tags from [supported languages](https://docs.sully.ai/api-reference/audio-transcriptions/languages) (including `multi`)
+- **Language** — tags from [supported languages](https://docs.sully.ai/api-reference/audio-transcriptions/languages) (including `multi`)
 - **Session duration** — manual stop, or auto-stop at 30s / 1m / 5m
 - **Dictation formatting** — sends `dictation=true` on the WebSocket
 - **Word debug** — optional table of word timings/confidence from the API

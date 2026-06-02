@@ -103,48 +103,33 @@ export function formatActiveConfig(
   return `${language} · ${durationLabel} · ${dictationLabel}`;
 }
 
-export function populateLanguageSelect(
-  select: HTMLSelectElement,
-  filterText = '',
-): void {
+export function populateLanguageSelect(select: HTMLSelectElement): void {
   const previous = select.value;
-  const needle = filterText.trim().toLowerCase();
 
   select.innerHTML = '';
 
-  const addOption = (value: string, label: string, group?: HTMLOptGroupElement) => {
-    if (needle && !label.toLowerCase().includes(needle) && !value.toLowerCase().includes(needle)) {
-      return;
-    }
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    (group ?? select).appendChild(option);
-  };
-
-  addOption(MULTILINGUAL_LANGUAGE_TAG, 'Multilingual (auto-detect)');
+  const multi = document.createElement('option');
+  multi.value = MULTILINGUAL_LANGUAGE_TAG;
+  multi.textContent = 'Multilingual (auto-detect)';
+  select.appendChild(multi);
 
   for (const { name, tags } of SUPPORTED_LANGUAGES) {
     const group = document.createElement('optgroup');
     group.label = name;
-    let groupHasOptions = false;
 
     for (const tag of tags) {
-      const label = tags.length > 1 ? `${name} (${tag})` : name;
-      if (!needle || label.toLowerCase().includes(needle) || tag.toLowerCase().includes(needle)) {
-        addOption(tag, label, group);
-        groupHasOptions = true;
-      }
+      const option = document.createElement('option');
+      option.value = tag;
+      option.textContent = tags.length > 1 ? `${name} (${tag})` : name;
+      group.appendChild(option);
     }
 
-    if (groupHasOptions) {
-      select.appendChild(group);
-    }
+    select.appendChild(group);
   }
 
   if (previous && [...select.options].some((option) => option.value === previous)) {
     select.value = previous;
-  } else if ([...select.options].some((option) => option.value === DEFAULT_STREAMING_LANGUAGE_TAG)) {
+  } else {
     select.value = DEFAULT_STREAMING_LANGUAGE_TAG;
   }
 }
