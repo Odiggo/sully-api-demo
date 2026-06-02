@@ -1,4 +1,9 @@
 import {
+  expandDictationLayoutMarkers,
+  joinTranscriptSegments,
+  separatorBetweenTranscriptSegments,
+} from './dictation-layout.js';
+import {
   SullyStreamingDemo,
   type SessionPhase,
   type TranscriptSegment,
@@ -34,7 +39,6 @@ const wordChip = document.getElementById('wordChip')!;
 const durationChip = document.getElementById('durationChip')!;
 const configChip = document.getElementById('configChip')!;
 const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
-const languageFilter = document.getElementById('languageFilter') as HTMLInputElement;
 const durationSelect = document.getElementById('durationSelect') as HTMLSelectElement;
 const dictationCheck = document.getElementById('dictationCheck') as HTMLInputElement;
 const wordDebugCheck = document.getElementById('wordDebugCheck') as HTMLInputElement;
@@ -89,11 +93,17 @@ function setBannerVisible(el: HTMLElement, visible: boolean): void {
 }
 
 function showAlert(message: string): void {
-  alertBannerText.textContent = message;
+  const trimmed = message.trim();
+  if (!trimmed) {
+    hideAlert();
+    return;
+  }
+  alertBannerText.textContent = trimmed;
   setBannerVisible(alertBanner, true);
 }
 
 function hideAlert(): void {
+  alertBannerText.textContent = '';
   setBannerVisible(alertBanner, false);
 }
 
@@ -108,14 +118,13 @@ function setStatusPhase(phase: SessionPhase): void {
 
 function setStreamControlsDisabled(disabled: boolean): void {
   languageSelect.disabled = disabled;
-  languageFilter.disabled = disabled;
   durationSelect.disabled = disabled;
   dictationCheck.disabled = disabled;
   wordDebugCheck.disabled = disabled;
 }
 
 function transcriptText(segments: TranscriptSegment[]): string {
-  return segments.map((s) => s.text).join(' ').trim();
+  return joinTranscriptSegments(segments);
 }
 
 function renderTranscript(segments: TranscriptSegment[]): void {
@@ -123,12 +132,20 @@ function renderTranscript(segments: TranscriptSegment[]): void {
   txBody.innerHTML = '';
 
   segments.forEach((segment, index) => {
+    const text = expandDictationLayoutMarkers(segment.text);
+    if (!text) return;
+
     if (index > 0) {
-      txBody.appendChild(document.createTextNode(' '));
+      const prevText = expandDictationLayoutMarkers(segments[index - 1].text);
+      const sep = separatorBetweenTranscriptSegments(prevText, text);
+      if (sep) {
+        txBody.appendChild(document.createTextNode(sep));
+      }
     }
+
     const span = document.createElement('span');
     span.className = segment.isFinal ? 'tx-final' : 'tx-interim';
-    span.textContent = segment.text;
+    span.textContent = text;
     txBody.appendChild(span);
   });
 
@@ -400,8 +417,10 @@ const demo = new SullyStreamingDemo({
   },
 
   onStreamError: ({ message }) => {
-    showAlert(message);
-    pushEvent('ERROR', message, 'stream');
+    const trimmed = message.trim();
+    if (!trimmed) return;
+    showAlert(trimmed);
+    pushEvent('ERROR', trimmed, 'stream');
   },
 
   onAudioLevel: (level) => {
@@ -441,8 +460,11 @@ const demo = new SullyStreamingDemo({
   },
 
   onError: (error) => {
-    showAlert(error.message);
-    pushEvent('ERROR', error.message);
+    const trimmed = error.message.trim();
+    if (trimmed) {
+      showAlert(trimmed);
+      pushEvent('ERROR', trimmed);
+    }
   },
 
   onComplete: ({ reason }) => {
@@ -533,14 +555,6 @@ newSessionBtn.addEventListener('click', () => {
 });
 
 clearLogBtn.addEventListener('click', clearEventLog);
-
-languageFilter.addEventListener('input', () => {
-  const value = languageSelect.value;
-  populateLanguageSelect(languageSelect, languageFilter.value);
-  if ([...languageSelect.options].some((o) => o.value === value)) {
-    languageSelect.value = value;
-  }
-});
 
 languageSelect.addEventListener('change', persistFormSettings);
 durationSelect.addEventListener('change', persistFormSettings);

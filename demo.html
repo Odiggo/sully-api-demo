@@ -472,6 +472,11 @@
             margin-bottom: 16px;
         }
 
+        .setup-banner[hidden],
+        .alert-banner[hidden] {
+            display: none !important;
+        }
+
         .setup-banner {
             background: var(--amber-glow);
             border: 1px solid var(--amber-b);
@@ -834,9 +839,8 @@
 
                         <div class="stream-settings">
                             <div>
-                                <label class="field-label" for="languageFilter">transcription language</label>
-                                <input class="stream-select" id="languageFilter" type="search" placeholder="Filter languages…" aria-label="Filter languages">
-                                <select class="stream-select" id="languageSelect" aria-label="Transcription language" style="margin-top:8px"></select>
+                                <label class="field-label" for="languageSelect">transcription language</label>
+                                <select class="stream-select" id="languageSelect" aria-label="Transcription language"></select>
                             </div>
                             <div>
                                 <label class="field-label" for="durationSelect">session duration</label>
