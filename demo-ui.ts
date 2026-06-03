@@ -110,7 +110,8 @@ export function populateLanguageSelect(select: HTMLSelectElement): void {
 
   const multi = document.createElement('option');
   multi.value = MULTILINGUAL_LANGUAGE_TAG;
-  multi.textContent = 'Multilingual (auto-detect)';
+  multi.textContent =
+    'Multilingual (auto-detect — es, de, fr, hi, it, ja, nl, pt, ru)';
   select.appendChild(multi);
 
   for (const { name, tags } of SUPPORTED_LANGUAGES) {
