@@ -1,9 +1,8 @@
 /**
  * Browser demo language picker — grouped by language family with main locale tags.
  *
- * Tags match the Sully streaming transcription API.
- * Regional variants
- * are omitted when a base tag (e.g. `ar`) is enough.
+ * Tags match the Sully streaming transcription API. Regional variants are omitted when a
+ * base tag (e.g. `ar`) is enough.
  *
  * @see https://docs.sully.ai/api-reference/audio-transcriptions/languages
  */
