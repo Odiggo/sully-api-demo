@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_PORT,
@@ -172,4 +173,17 @@ test('loadServerConfig fails closed on dotenv blank-like values', async () => {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('.env.example boots with safe defaults and missing secrets', () => {
+  const examplePath = fileURLToPath(new URL('../.env.example', import.meta.url));
+  const parsed = loadServerConfig({ envFilePath: examplePath, processEnv: {} });
+
+  assert.equal(parsed.port, DEFAULT_PORT);
+  assert.equal(parsed.openBrowser, true);
+  assert.deepEqual(parsed.credentials, {
+    ready: false,
+    missing: ['SULLY_API_KEY', 'SULLY_ACCOUNT_ID'],
+    invalid: [],
+  });
 });

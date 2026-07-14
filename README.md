@@ -1,298 +1,140 @@
-# Sully API Demo
-Demo code showcasing the Sully.ai API capabilities for healthcare tech companies to build on
+# Sully API Playground
 
-## 🚀 Quick Start Guide
+Local browser workspace for exercising five Sully API workflows from one UI: live streaming, uploaded transcription, note generation, medical coding, and text-to-JSON.
 
-### Prerequisites
-- Node.js 18+ installed ([Download](https://nodejs.org))
-- Sully API credentials:
-  - API Key
-  - Account ID
-  - API URL
-- System audio dependencies for streaming demos:
-  ```bash
-  # Ubuntu/Debian
-  sudo apt-get install sox libsox-fmt-all
+Permanent Sully credentials stay in the local Node server. The browser receives only a temporary streaming token when live transcription starts. Use synthetic or approved test data: submitted content still goes to the configured Sully API.
 
-  # macOS
-  brew install sox
+## Quick start
 
-  # Windows
-  # Download and install Sox from https://sourceforge.net/projects/sox/
-  ```
+Requirements:
 
-### 🛠️ Setup
-1. Clone the repository:
+- Node.js 22 or newer
+- pnpm 10.33.2 (pinned in `package.json`)
+- Sully API key and account ID
+- Chrome or Chromium for microphone streaming
+
 ```bash
-git clone https://github.com/Odiggo/sully-api-demo.git
-cd sully-api-demo
-```
-
-2. Install dependencies:
-```bash
-npm install
-# or if you prefer bun:
-# bun install
-```
-
-3. Configure environment:
-```bash
-# Create .env file with your Sully API credentials:
+pnpm install --frozen-lockfile
 cp .env.example .env
-# Edit .env with your actual values:
-SULLY_API_URL=your_api_url_here
-SULLY_API_KEY=your_api_key_here
-SULLY_ACCOUNT_ID=your_account_id_here
+chmod 600 .env
 ```
 
-### 🎯 Running the Demos
+Edit `.env` without sharing or printing its contents:
 
-#### Browser-Based Demo (Default)
+```dotenv
+SULLY_API_URL=https://api-testing.sully.ai
+SULLY_API_KEY=your_api_key
+SULLY_ACCOUNT_ID=your_account_id
+```
+
+Use `https://api.sully.ai` only when you intend to use production. `SULLY_API_URL` must be an exact approved origin—do not append `/v1` or `/v2`.
+
+Start the playground:
+
 ```bash
-# Start the web server — browser opens automatically
-npm start
+pnpm start
 ```
 
-Before recording, configure:
+`pnpm start` builds both browser and server code, listens on `127.0.0.1:3000`, and opens the new playground. Confirm readiness:
 
-- **Language** — tags from [supported languages](https://docs.sully.ai/api-reference/audio-transcriptions/languages) (including `multi`)
-- **Session duration** — manual stop, or auto-stop at 30s / 1m / 5m
-- **Dictation formatting** — sends `dictation=true` on the WebSocket
-- **Word debug** — optional table of word timings/confidence from the API
-
-**Session flow:** Click record → *initializing* (token) → *connecting* (WebSocket) → *live* (mic + transcript). The timer runs only while live. **Space** toggles record when focus is not in a form field.
-
-**Transcript:** Italic = interim · solid = finalized. **Copy** exports text; **New session** clears transcript and event log.
-
-Settings persist in `localStorage`. On load, `GET /health` checks `.env` and shows a setup banner if credentials are missing.
-
-### Browser demo troubleshooting
-
-| Symptom | What to try |
-|--------|-------------|
-| Setup banner on load | Set `SULLY_API_KEY`, `SULLY_ACCOUNT_ID`, `SULLY_API_URL` in `.env` and restart `pnpm start` |
-| Mic denied | Allow microphone for `localhost` in browser settings |
-| No transcript while “live” | Confirm status pill is *connected*; check event log for `ERROR` |
-| Connection lost banner | Network blip — demo retries up to 5 times; start a new session if it fails |
-| 16 kHz error | Use Chrome or close other apps using the microphone |
-
-#### File Transcription & Note Generation Demo
 ```bash
-# Basic demo with default sample audio file
-npm run start:note
-
-# With custom audio file
-npx tsx sully-demo.ts note /path/to/your/audio.wav
+curl --fail --silent http://127.0.0.1:3000/health
 ```
 
-#### Live Audio Streaming Demo
+Ready output is `{"ok":true,"missing":[],"invalid":[]}`. HTTP 200 alone is not readiness; the same endpoint returns `ok: false` plus credential *names* when setup is incomplete.
+
+Agents can use the repo-local [`sully-api-demo-setup` skill](.agents/skills/sully-api-demo-setup/SKILL.md) for a non-destructive setup and verification pass.
+
+## Workflows
+
+| UI workflow | Local route | Sully route | Behavior | Output and handoff |
+| --- | --- | --- | --- | --- |
+| Live streaming | `POST /api/streaming-token` + WebSocket | `POST /v1/audio/transcriptions/stream/token` + `/v1/audio/transcriptions/stream` | Realtime microphone audio; temporary token; reconnect and explicit stop lifecycle | Interim/final transcript, optional word details |
+| Uploaded transcription | `POST /api/transcriptions`, `GET /api/transcriptions/:id` | `POST /v2/audio/transcriptions`, `GET /v2/audio/transcriptions/:id` | Async upload and bounded polling | Transcript → note generation or coding |
+| Note generation | `POST /api/notes`, `GET /api/notes/:id` | `POST /v1/notes`, `GET /v1/notes/:id` | Async note creation and bounded polling | Markdown/JSON note → coding |
+| Medical coding | `POST /api/codings`, `GET /api/codings/:id` | `POST /v1/codings`, `GET /v1/codings/:id` | Async analysis and bounded polling | Diagnosis/procedure codes with source spans |
+| Text to JSON | `POST /api/text-to-json` | `POST /v1/utils/text-to-json` | Synchronous structured extraction | Validated JSON object |
+
+Each panel keeps request controls beside formatted and raw results. Outputs remain in browser memory only; only non-clinical streaming preferences persist in `localStorage`. Switching away from active streaming asks before stopping it.
+
+Uploaded transcription accepts WAV, MP3, FLAC, OGG, WebM, MP4, M4A, AAC, and Opus files up to 100 MB. The bundled audio sample is synthetic. Uploaded files use an OS temporary directory and are removed after each handled request; a process crash can leave a temporary file behind.
+
+## Configuration
+
+| Variable | Required | Default | Notes |
+| --- | --- | --- | --- |
+| `SULLY_API_URL` | Yes | — | Exact `https://api-testing.sully.ai` or `https://api.sully.ai` origin; loopback is allowed for local test doubles |
+| `SULLY_API_KEY` | Yes | — | Server-side only |
+| `SULLY_ACCOUNT_ID` | Yes | — | Server-side; account ID is included with the temporary streaming connection |
+| `PORT` | No | `3000` | Integer from 1 through 65535 |
+| `SULLY_DEMO_OPEN_BROWSER` | No | `true` | Exactly `true` or `false` |
+
+Process environment variables override `.env`. Before switching accounts or environments, check whether credential variable *names* are already exported in your shell; never print their values.
+
+## Commands
+
 ```bash
-# Server-side streaming (10-second default)
-npm run start:stream
-
-# Client-side streaming with custom duration
-npx tsx sully-demo.ts stream -m client -d 20
-
-# With specific language
-npx tsx sully-demo.ts stream -l en-US -d 15
+pnpm start             # build and run the omni browser playground
+pnpm typecheck         # strict server and browser TypeScript checks
+pnpm build             # build browser and server bundles
+pnpm test              # unit then integration tests
+pnpm test:e2e          # build and run Playwright browser tests
+pnpm start:note        # legacy CLI note example
+pnpm start:stream      # legacy CLI streaming example
 ```
 
-### 📋 Demo Workflow
-The script demonstrates three main Sully API capabilities:
+Playwright tests need Chromium once per machine:
 
-#### 1. File Transcription & Note Generation
-1. **Note Style Creation**
-   - Sets up custom formatting rules
-   - Configures note structure preferences
-
-2. **Audio Transcription**
-   - Validates audio file format and size
-   - Uploads/transcribes audio via Sully API
-   - Retrieves transcription results
-
-3. **Clinical Note Generation**
-   - Processes transcription
-   - Applies note style template
-   - Generates structured clinical note
-
-4. **Note Management**
-   - Retrieves formatted note
-   - Demonstrates note deletion
-
-#### 2. Live Audio Streaming (Optional)
-- Real-time audio capture and transcription
-- Streams microphone input directly to Sully API
-- Shows live transcription results
-- Configurable duration (default: 10 seconds)
-- Supports both client-side and server-side streaming modes
-
-#### 3. Browser-Based Demo
-- Interactive web interface for real-time transcription
-- WebSocket-based streaming directly from browser
-- Visual status indicators and controls
-- Accessible at `http://localhost:3000` after starting the server
-
-To use the browser demo:
-1. Start the server: `pnpm start`
-2. Browser opens at `http://localhost:3000`
-3. Confirm there is no setup banner (`http://localhost:3000/health` should report `"ok": true`)
-4. Choose language, duration, and options; click **record**
-5. Grant microphone permission when prompted
-6. Speak — interim text appears italic; finalized phrases turn solid
-7. Click **stop**, wait for auto-stop, or press **Space** to end/start
-
-### 📊 Example Output
-
-#### File Transcription Demo
 ```bash
-🚀 Initializing Sully API Demo
-ℹ️  Using API endpoint: https://api.sully.ai
-ℹ️  Processing audio file: audio/demo_audio.wav
-
-🚀 Step 1: Creating Note Style Template
-ℹ️  Configuring note style with sample format and instructions...
-✅ Note style template created successfully
-
-🚀 Step 2: Transcribing Audio File
-ℹ️  Starting audio transcription process...
-ℹ️  Reading audio file...
-ℹ️  Uploading audio...
-ℹ️  Transcription ID: tr_abc123xyz
-ℹ️  Waiting for transcription...
-ℹ️  Waiting for transcription...
-✅ Audio transcription completed
-📋 Transcription Result:
-{
-  "text": "Patient is a 45-year-old female presenting with severe headache for the past 3 days. Pain is described as throbbing and located in the frontal region. Patient rates pain as 8/10. No previous history of migraines..."
-}
-
-🚀 Step 3: Generating Clinical Note
-ℹ️  Creating clinical note from transcription...
-✅ Clinical note created with ID: note_def456uvw
-
-🚀 Step 4: Retrieving Generated Note
-ℹ️  Fetching the generated clinical note...
-ℹ️  Note still processing...
-ℹ️  Note still processing...
-✅ Note retrieved successfully
-📋 Generated Note Content:
-{
-  "soap": {
-    "subjective": {
-      "chiefComplaint": "Headache",
-      "hpi": {
-        "onset": "3 days ago",
-        "severity": "8/10",
-        "quality": "throbbing",
-        "location": "frontal region",
-        "associated_symptoms": [],
-        "modifying_factors": []
-      },
-      "pmh": {
-        "migraines": "No previous history",
-        "chronic_conditions": [],
-        "medications": []
-      },
-      "allergies": [],
-      "family_history": [],
-      "social_history": {}
-    },
-    "objective": {
-      "vital_signs": {},
-      "physical_exam": {}
-    },
-    "assessment": {
-      "diagnoses": [],
-      "differential_diagnoses": []
-    },
-    "plan": {
-      "medications": [],
-      "tests": [],
-      "procedures": [],
-      "follow_up": ""
-    }
-  }
-}
-
-🚀 Step 5: Cleanup
-ℹ️  Deleting note with ID: note_def456uvw
-✅ Note deleted successfully
-✅ Demo completed successfully
+pnpm exec playwright install chromium
 ```
 
-#### Streaming Demo Output
-```bash
-🎤 ==========================================
-🎤 LIVE AUDIO STREAMING IS NOW ACTIVE
-🎤 Start speaking! Your voice will be transcribed in real-time
-🎤 ==========================================
+The two CLI scripts are retained as legacy examples, not the main demo. They can print transcript or note content, use older example flows, and do not offer the browser playground's full workflow coverage or privacy boundaries. Prefer `pnpm start`.
 
-⏱️  Time remaining: 9 seconds
-🗣️  Hello, this is a test of the streaming audio...
-🗣️  The transcription appears in real-time as you speak...
+## Architecture and safety boundaries
 
-🎤 ==========================================
-🎤 STREAMING DEMO COMPLETED
-🎤 ==========================================
-```
+- Browser: accessible five-tab TypeScript UI with keyboard navigation, live regions, cancellable polling, result copy, and workflow handoffs.
+- Local server: loopback-only Express app, fixed static allowlist, same-local-origin checks, CSP, no-store API responses, bounded bodies, strict request validation, and stable safe errors.
+- Sully client: fixed upstream route allowlist, exact approved origins, redirects disabled, timeouts/abort propagation, bounded response decoding, and response validation.
+- Secrets: permanent API key and account ID are never embedded in the browser bundle. Server logs request method, path, status, and request ID—not request bodies or credentials.
+- Data: no application database. Clinical inputs/results remain in page memory while still being transmitted upstream for processing.
 
-### 📁 Project Structure
-```
-sully-api-demo/
-├── audio/
-│   └── demo_audio.wav          # Sample audio file for testing
-├── dist/                       # Compiled TypeScript output
-├── .data/                      # Runtime data directory
-├── sully-demo.ts              # Main CLI demo script
-├── server.ts                  # Express server for browser demo
-├── sully-browser-demo.ts      # Browser-based streaming client
-├── demo.html                  # Web interface for browser demo
-├── package.json               # Dependencies and scripts
-├── tsconfig.json              # TypeScript configuration
-├── tsconfig.browser.json      # Browser-specific TypeScript config
-├── .env                       # Environment variables (create from .env.example)
-├── .gitignore                 # Git ignore rules
-├── .prettierrc.yml           # Code formatting configuration
-└── README.md                  # This file
-```
+This is a local development demo, not a production PHI handling system.
 
-### 🔧 Available Scripts
-- `npm start` - Build and launch the browser demo (opens automatically)
-- `npm run start:note` - Run the file transcription & note generation demo
-- `npm run start:stream` - Run the live audio streaming demo
-- `npm test` - Run tests (placeholder)
+## Documentation review and gaps closed
 
-### 🎵 Supported Audio Formats
-The API supports the following audio formats for file transcription:
-- `.mp3` - MPEG Audio Layer 3
-- `.wav` - Waveform Audio File Format
-- `.m4a` - MPEG-4 Audio
-- `.ogg` - Ogg Vorbis
+Review against Sully's current API reference found the old repo centered on three legacy examples and mixed npm/Bun instructions, Node 18, four upload formats, placeholder test guidance, and host audio dependencies. Current implementation:
 
-### 🔑 Environment Variables
-Required environment variables in your `.env` file:
-- `SULLY_API_URL` - The Sully API endpoint URL
-- `SULLY_API_KEY` - Your API key for authentication
-- `SULLY_ACCOUNT_ID` - Your account identifier
+- makes the five requested workflows first-class in one browser UI;
+- uses v2 create/get for uploaded transcription and current v1 routes for notes, coding, text-to-JSON, and streaming;
+- models documented async status families independently (`pending`/`processing`/`completed`/`failed` versus note `STATUS_*` values);
+- matches the documented 100 MB transcription limit and current upload formats;
+- keeps durable credentials behind a local token-broker/proxy boundary;
+- replaces setup ambiguity with pnpm/Node pins, real tests, `.env` diagnostics, and a repo-local setup skill.
 
-Optional:
-- `PORT` - Port for the browser demo server (default: 3000)
+Automated tests use a fake Sully upstream and mocked browser API responses; they do not prove a specific account's credentials, entitlements, billing, or current provider availability. A credentialed manual smoke test remains required for live-provider verification.
 
-### 🛠️ Development
-The project uses TypeScript with ES modules. Key technologies:
-- **TypeScript** - Type-safe JavaScript
-- **Node.js** - Runtime environment
-- **Express** - Web server for browser demo
-- **WebSocket** - Real-time streaming communication
-- **Commander.js** - CLI argument parsing
-- **node-microphone** - Audio capture for streaming
+## Troubleshooting
 
-### 🔍 Troubleshooting
-- **Audio file not found**: Ensure the audio file path is correct and the file exists
-- **API authentication errors**: Verify your `.env` file contains valid credentials
-- **Microphone access denied**: Grant microphone permissions in your browser/system
-- **WebSocket connection failed**: Check your network connection and API endpoint
-- **Transcription timeout**: Large audio files may take longer to process
+| Symptom | Fix |
+| --- | --- |
+| `Setup required` | Read `/health`; add/fix only the named variables in `.env`, then restart |
+| Correct `.env`, wrong account | Unset inherited `SULLY_API_URL`, `SULLY_API_KEY`, or `SULLY_ACCOUNT_ID` variables that override the file |
+| Invalid API URL | Use an exact approved origin without path, query, credentials, or fragment |
+| Microphone denied | Allow microphone access for `http://127.0.0.1:3000` or `http://localhost:3000` |
+| Streaming disconnects | Check connection status; automatic reconnect is bounded, then start a new session |
+| Upload rejected | Confirm extension and MIME type agree, file is non-empty, and size is at most 100 MB |
+| Async timeout | Retry smaller input; transcription waits up to 15 minutes, notes/coding up to 5 minutes |
+| Playwright lacks browser | Run `pnpm exec playwright install chromium` |
 
-### 📚 API Documentation
-For detailed API documentation and additional features, visit the [Sully AI Documentation](https://docs.sully.ai).
+## Sully documentation
+
+- [API reference v2](https://docs.sully.ai/api-reference-v2/)
+- [Create uploaded transcription](https://docs.sully.ai/api-reference-v2/audio-transcriptions/create)
+- [Get uploaded transcription](https://docs.sully.ai/api-reference-v2/audio-transcriptions/get)
+- [Streaming](https://docs.sully.ai/api-reference/audio-transcriptions/streaming)
+- [Supported transcription languages](https://docs.sully.ai/api-reference/audio-transcriptions/languages)
+- [Clinical notes guide](https://docs.sully.ai/documentation/guides/clinical-notes)
+- [Create coding](https://docs.sully.ai/api-reference/codings/create)
+- [Get coding](https://docs.sully.ai/api-reference/codings/get)
+- [Text to JSON](https://docs.sully.ai/api-reference/utils/text-to-json)
