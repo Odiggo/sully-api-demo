@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   buildStreamingWebSocketUrl,
   parseStreamingTokenResponse,
-} from './streaming-client.ts';
+} from '../streaming-client.js';
 
 test('buildStreamingWebSocketUrl includes dictation and auth query params', () => {
   const url = buildStreamingWebSocketUrl({

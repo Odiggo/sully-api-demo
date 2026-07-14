@@ -1,15 +1,21 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./",
-    "target": "ES2020",
-    "module": "ES2020",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node"
+    "noEmit": true,
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": []
   },
-  "include": ["server.ts"],
-  "exclude": ["node_modules", "sully-demo.ts", "sully-browser-demo.ts"]
+  "include": [
+    "browser/**/*.ts",
+    "contracts/**/*.ts",
+    "demo-app.ts",
+    "demo-ui.ts",
+    "sully-browser-demo.ts",
+    "streaming-client.ts",
+    "dictation-layout.ts",
+    "languages.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
 }
