@@ -25,6 +25,9 @@ interface HarnessOptions {
   recorder?: ReturnType<typeof deferred<void>>;
   failRelease?: 'recorder' | 'audio' | 'socket' | 'listener';
   connectSocket?: boolean;
+  closeAfterConnect?: boolean;
+  closeAfterConnectAttempt?: number;
+  timers?: StreamingTimers;
 }
 
 function createTransportHarness(options: HarnessOptions = {}) {
@@ -66,7 +69,13 @@ function createTransportHarness(options: HarnessOptions = {}) {
         throw new Error('listener release failed');
       }
       if (handler && options.connectSocket !== false) {
-        queueMicrotask(() => handler(JSON.stringify({ type: 'status', status: 'connected' })));
+        queueMicrotask(() => {
+          handler(JSON.stringify({ type: 'status', status: 'connected' }));
+          if (
+            options.closeAfterConnect ||
+            options.closeAfterConnectAttempt === counts.socket
+          ) closeHandler?.();
+        });
       }
     },
     setCloseHandler(handler) {
@@ -96,7 +105,7 @@ function createTransportHarness(options: HarnessOptions = {}) {
       socketUrls.push(url);
       return socket;
     },
-    timers,
+    timers: options.timers ?? timers,
   };
   const errors: Error[] = [];
   const transport = new SullyStreamingDemo(
@@ -144,6 +153,27 @@ test('opens streaming socket with documented linear16 encoding', async () => {
   await harness.transport.start();
   assert.match(harness.socketUrls[0] ?? '', /[?&]encoding=linear16(?:&|$)/);
   await harness.transport.stop('manual');
+});
+
+test('connected socket closing before start continuation never reaches live', async () => {
+  const harness = createTransportHarness({ closeAfterConnect: true });
+  await harness.transport.start();
+  assert.equal(harness.transport.getPhase(), 'error');
+  assert.equal(harness.counts.recorder, 0);
+  assert.equal(harness.errors.length, 1);
+});
+
+test('socket closing while microphone permission is pending never reaches live', async () => {
+  const recorder = deferred<void>();
+  const harness = createTransportHarness({ recorder });
+  const starting = harness.transport.start();
+  while (harness.counts.recorder === 0) await Promise.resolve();
+  harness.triggerSocketClose();
+  recorder.resolve();
+  await starting;
+  assert.equal(harness.transport.getPhase(), 'error');
+  assert.equal(harness.counts.recorderStop, 1);
+  assert.equal(harness.errors.length, 1);
 });
 
 test('stop during token acquisition prevents recorder and socket creation', async () => {
@@ -288,8 +318,34 @@ test('unexpected live socket close reconnects with one fresh token', async () =>
     await Promise.resolve();
   }
   assert.equal(harness.counts.token, 2);
+  assert.equal(harness.counts.socketClose, 1);
   assert.equal(transport.getPhase(), 'live');
   await transport.stop('manual');
+});
+
+test('immediate close during reconnect schedules exactly one next attempt', async () => {
+  const retryCallbacks: Array<() => void> = [];
+  const timers: StreamingTimers = {
+    setTimeout(callback, milliseconds) {
+      if (milliseconds < 10_000) retryCallbacks.push(callback);
+      return callback;
+    },
+    clearTimeout: () => undefined,
+    setInterval: () => 1,
+    clearInterval: () => undefined,
+  };
+  const harness = createTransportHarness({ closeAfterConnectAttempt: 2, timers });
+  await harness.transport.start();
+  harness.triggerSocketClose();
+  const firstRetry = retryCallbacks.shift();
+  assert(firstRetry);
+  firstRetry();
+  while (harness.counts.socket < 2) await Promise.resolve();
+  for (let turn = 0; turn < 20 && retryCallbacks.length === 0; turn += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(retryCallbacks.length, 1);
+  await harness.transport.stop('manual');
 });
 
 for (const failingStep of ['recorder', 'audio', 'socket', 'listener'] as const) {

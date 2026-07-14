@@ -165,12 +165,25 @@ async function withUploadCleanup<Output>(
   filePath: string,
   cleanup: (filePath: string) => Promise<void>,
   operation: () => Promise<Output>,
+  onCleanupFailure: () => void,
 ): Promise<Output> {
+  let result: { ok: true; value: Output } | { ok: false; error: unknown };
   try {
-    return await operation();
-  } finally {
-    await cleanup(filePath);
+    result = { ok: true, value: await operation() };
+  } catch (error: unknown) {
+    result = { ok: false, error };
   }
+  try {
+    await cleanup(filePath);
+  } catch {
+    try {
+      onCleanupFailure();
+    } catch {
+      // Cleanup telemetry cannot replace the provider outcome.
+    }
+  }
+  if (!result.ok) throw result.error;
+  return result.value;
 }
 
 function createUploadMiddleware(options: CreateApiRouterOptions): RequestHandler {
@@ -249,8 +262,14 @@ function registerUploadRoute(
     response.locals.uploadFilename = options.createUploadFilename();
     const expectedPath = path.join(options.uploadDirectory, response.locals.uploadFilename);
     upload(request, response, (uploadError) => {
-      withUploadCleanup(expectedPath, options.removeUploadFile ?? removeUpload, () =>
-        processUploadedTranscription(options, request, response, uploadError),
+      withUploadCleanup(
+        expectedPath,
+        options.removeUploadFile ?? removeUpload,
+        () => processUploadedTranscription(options, request, response, uploadError),
+        () => options.logger.error({
+          event: 'upload_cleanup_failed',
+          requestId: getRequestId(response),
+        }),
       )
         .then((result) => response.json(result))
         .catch(next);

@@ -14,6 +14,7 @@ export interface StreamingGenerationResources {
   audioClosed: boolean;
   socket?: SocketPort;
   socketClosed: boolean;
+  socketDisconnected: boolean;
   handshakeTimeout?: unknown;
   retryTimeout?: unknown;
   countdownInterval?: unknown;

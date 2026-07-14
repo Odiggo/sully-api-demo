@@ -125,7 +125,7 @@ function updateReadiness(ready: boolean, diagnostics: string[]): void {
   connectionLabel.textContent = ready ? 'API ready' : 'Setup required';
   setup.dataset.ready = String(ready);
   setupMessage.textContent = ready
-    ? 'Local API is ready. Credentials remain on the server.'
+    ? 'Local API is ready. Your API key remains on the server.'
     : `Add or fix ${diagnostics.join(', ')} in .env, then restart the playground.`;
   for (const action of document.querySelectorAll<HTMLButtonElement>('[data-api-action]')) {
     action.disabled = !ready;

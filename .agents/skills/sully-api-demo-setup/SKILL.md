@@ -79,5 +79,5 @@ When user asks for full browser verification, run `pnpm test:e2e`. If Chromium i
 ## Safety notes
 
 - Use synthetic/approved test data. UI has no database, but submitted content goes to configured Sully API.
-- Uploaded audio briefly uses OS temp storage and is removed after handled requests; crashes can leave a temporary file.
+- Uploaded audio briefly uses process-owned OS temp storage. Removal is best-effort before responses and at graceful shutdown; cleanup failures or crashes can leave a temporary file.
 - Existing exported credentials may target a different account or environment than `.env`.

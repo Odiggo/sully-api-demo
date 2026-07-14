@@ -2,7 +2,7 @@
 
 Local browser workspace for exercising five Sully API workflows from one UI: live streaming, uploaded transcription, note generation, medical coding, and text-to-JSON.
 
-Permanent Sully credentials stay in the local Node server. The browser receives only a temporary streaming token when live transcription starts. Use synthetic or approved test data: submitted content still goes to the configured Sully API.
+The Sully API key stays in the local Node server. The browser receives a temporary streaming token and account ID when live transcription starts. Use synthetic or approved test data: submitted content still goes to the configured Sully API.
 
 ## Quick start
 
@@ -57,7 +57,7 @@ Agents can use the repo-local [`sully-api-demo-setup` skill](.agents/skills/sull
 
 Each panel keeps request controls beside formatted and raw results. Outputs remain in browser memory only; only non-clinical streaming preferences persist in `localStorage`. Switching away from active streaming asks before stopping it.
 
-Uploaded transcription accepts WAV, MP3, FLAC, OGG, WebM, MP4, M4A, AAC, and Opus files up to 100 MB. The bundled audio sample is synthetic. Uploaded files use an OS temporary directory and are removed after each handled request; a process crash can leave a temporary file behind.
+Uploaded transcription accepts WAV, MP3, FLAC, OGG, WebM, MP4, M4A, AAC, and Opus files up to 100 MB. The bundled audio sample is synthetic. Uploaded files use a process-owned OS temporary directory. Removal is attempted before each response and again at graceful shutdown; a cleanup failure or process crash can leave a temporary file behind.
 
 ## Configuration
 
@@ -96,8 +96,8 @@ The two CLI scripts are retained as legacy examples, not the main demo. They can
 - Browser: accessible five-tab TypeScript UI with keyboard navigation, live regions, cancellable polling, result copy, and workflow handoffs.
 - Local server: loopback-only Express app, fixed static allowlist, same-local-origin checks, CSP, no-store API responses, bounded bodies, strict request validation, and stable safe errors.
 - Sully client: fixed upstream route allowlist, exact approved origins, redirects disabled, timeouts/abort propagation, bounded response decoding, and response validation.
-- Secrets: permanent API key and account ID are never embedded in the browser bundle. Server logs request method, path, status, and request ID—not request bodies or credentials.
-- Data: no application database. Clinical inputs/results remain in page memory while still being transmitted upstream for processing.
+- Secrets: the API key never enters the browser; account ID and temporary token are supplied only at streaming runtime. Server logs request method, path, status, and request ID—not request bodies or credentials.
+- Data: no application database. Clinical inputs/results remain in page memory and are transmitted upstream; uploaded audio also uses best-effort temporary disk storage.
 
 This is a local development demo, not a production PHI handling system.
 

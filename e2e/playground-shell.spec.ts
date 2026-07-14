@@ -17,6 +17,16 @@ test('exposes five keyboard-operable workflows', async ({ page }) => {
   await expect(tabs.nth(0)).toBeFocused();
 });
 
+test('states credential and transient upload boundaries precisely', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('API key', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sully + temp storage', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('Local API is ready. Your API key remains on the server.'),
+  ).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('Clinical dataMemory only');
+});
+
 test('has no automatically detectable WCAG A/AA violations', async ({ page }) => {
   await page.goto('/');
   const results = await new AxeBuilder({ page })

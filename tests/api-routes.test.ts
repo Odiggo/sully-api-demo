@@ -11,7 +11,13 @@ import type { Express } from 'express';
 import NodeFormData from 'form-data';
 import nodeFetch from 'node-fetch';
 
-import { MAX_AUDIO_FILE_BYTES, type CodingRequest, type NoteRequest, type TextToJsonRequest } from '../contracts/index.js';
+import {
+  MAX_AUDIO_FILE_BYTES,
+  apiErrorSchema,
+  type CodingRequest,
+  type NoteRequest,
+  type TextToJsonRequest,
+} from '../contracts/index.js';
 import { createServerApp } from '../server/server-app.js';
 import { SullyApiError, type SullyApiClient, type TranscriptionUpload } from '../server/sully-api-client.js';
 import type { ServerConfig } from '../server/server-config.js';
@@ -119,6 +125,7 @@ async function listen(app: Express): Promise<{ url: string; close: () => Promise
 async function createHarness(options: {
   config?: ServerConfig;
   client?: SullyApiClient;
+  logger?: DemoLogger;
   uploadDirectory?: string;
   removeUploadFile?: (filePath: string) => Promise<void>;
 } = {}) {
@@ -135,7 +142,7 @@ async function createHarness(options: {
   const app = await createServerApp({
     config: options.config ?? READY_CONFIG,
     client: options.client ?? createFakeClient(state),
-    logger,
+    logger: options.logger ?? logger,
     uploadDirectory,
     rootDirectory: ROOT_DIRECTORY,
     createRequestId: () => `request-${++requestNumber}`,
@@ -504,7 +511,7 @@ test('aborts upstream work and removes upload when browser disconnects', async (
   assert.deepEqual(await readdir(harness.uploadDirectory), []);
 });
 
-test('cleanup failure returns a stable error without exposing generated path', async (t) => {
+test('cleanup failure preserves successful upstream creation and logs no generated path', async (t) => {
   const attemptedPaths: string[] = [];
   const harness = await createHarness({
     removeUploadFile: async (filePath) => {
@@ -520,10 +527,67 @@ test('cleanup failure returns a stable error without exposing generated path', a
   form.append('multichannel', 'false');
   const response = await fetch(`${harness.url}/api/transcriptions`, { method: 'POST', body: form });
   const serialized = JSON.stringify(await response.json());
-  assert.equal(response.status, 500);
+  assert.equal(response.status, 200);
+  assert.deepEqual(JSON.parse(serialized), TRANSCRIPTION);
   assert.equal(attemptedPaths.length, 1);
+  assert(JSON.stringify(harness.events).includes('upload_cleanup_failed'));
   assert(!serialized.includes(attemptedPaths[0]));
   assert(!serialized.includes('sample.wav'));
+  assert(!JSON.stringify(harness.events).includes(attemptedPaths[0]));
+});
+
+test('cleanup logger failure cannot replace successful upstream creation', async (t) => {
+  const harness = await createHarness({
+    logger: {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => {
+        throw new Error('logger failed');
+      },
+    },
+    removeUploadFile: async () => {
+      throw new Error('cleanup failed');
+    },
+  });
+  t.after(harness.close);
+  const form = new FormData();
+  form.append('audio', new Blob(['RIFF'], { type: 'audio/wav' }), 'sample.wav');
+  form.append('language', 'en');
+  form.append('dictation', 'false');
+  form.append('multichannel', 'false');
+
+  const response = await fetch(`${harness.url}/api/transcriptions`, { method: 'POST', body: form });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), TRANSCRIPTION);
+});
+
+test('cleanup failure preserves primary upstream failure', async (t) => {
+  const client = createFakeClient(
+    { calls: [] },
+    {
+      async createTranscription() {
+        throw new SullyApiError('UPSTREAM_TIMEOUT', 'request-primary');
+      },
+    },
+  );
+  const harness = await createHarness({
+    client,
+    removeUploadFile: async () => {
+      throw new Error('cleanup failed');
+    },
+  });
+  t.after(harness.close);
+  const form = new FormData();
+  form.append('audio', new Blob(['RIFF'], { type: 'audio/wav' }), 'sample.wav');
+  form.append('language', 'en');
+  form.append('dictation', 'false');
+  form.append('multichannel', 'false');
+
+  const response = await fetch(`${harness.url}/api/transcriptions`, { method: 'POST', body: form });
+  const body = apiErrorSchema.parse(await response.json());
+  assert.equal(response.status, 504);
+  assert.equal(body.error.code, 'UPSTREAM_TIMEOUT');
+  assert(JSON.stringify(harness.events).includes('upload_cleanup_failed'));
 });
 
 test('creates missing upload directory before concurrent first requests', async (t) => {

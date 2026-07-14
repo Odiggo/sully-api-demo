@@ -113,6 +113,7 @@ export class SullyStreamingDemo implements StreamingTransport {
       recorderStopped: false,
       audioClosed: false,
       socketClosed: false,
+      socketDisconnected: false,
       retryCount: 0,
       completionEmitted: false,
     };
@@ -147,6 +148,9 @@ export class SullyStreamingDemo implements StreamingTransport {
       resources.recorder.setAudioHandler((samples) => this.handleAudio(resources, samples));
       await resources.recorder.start(resources.audioContext);
       resources.recorderStarted = true;
+      if (resources.socketDisconnected) {
+        throw new Error('WebSocket closed before streaming could start');
+      }
       if (!this.isCurrent(resources)) {
         await this.cleanupResources(resources);
         return;
@@ -211,20 +215,24 @@ export class SullyStreamingDemo implements StreamingTransport {
       resources.audioClosed = true;
       releases.push(Promise.resolve().then(() => audioContext.close()));
     }
-    const socket = resources.socket;
-    if (socket && !resources.socketClosed) {
-      resources.socketClosed = true;
-      releases.push(
-        Promise.resolve().then(() => socket.setMessageHandler(undefined)),
-        Promise.resolve().then(() => socket.setCloseHandler(undefined)),
-        Promise.resolve().then(() => socket.setErrorHandler(undefined)),
-        Promise.resolve().then(() => socket.close()),
-      );
-    }
+    releases.push(...this.releaseSocket(resources));
     const results = await Promise.allSettled(releases);
     return results
       .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
       .map((result) => result.reason);
+  }
+
+  private releaseSocket(resources: StreamingGenerationResources): Promise<void>[] {
+    const socket = resources.socket;
+    if (!socket || resources.socketClosed) return [];
+    resources.socketClosed = true;
+    resources.socket = undefined;
+    return [
+      Promise.resolve().then(() => socket.setMessageHandler(undefined)),
+      Promise.resolve().then(() => socket.setCloseHandler(undefined)),
+      Promise.resolve().then(() => socket.setErrorHandler(undefined)),
+      Promise.resolve().then(() => socket.close()),
+    ];
   }
 
   private releaseTimers(resources: StreamingGenerationResources): Promise<void>[] {
@@ -263,11 +271,11 @@ export class SullyStreamingDemo implements StreamingTransport {
     const socket = this.dependencies.createSocket(url);
     resources.socket = socket;
     resources.socketClosed = false;
+    resources.socketDisconnected = false;
     await this.waitForHandshake(resources, socket);
-    if (!this.isCurrent(resources)) return;
-    socket.setMessageHandler((message) => this.handleMessage(resources, message));
-    socket.setErrorHandler(() => this.config.onStreamError?.({ message: 'Streaming socket error', fatal: false }));
-    socket.setCloseHandler(() => this.scheduleReconnect(resources));
+    if (resources.socketDisconnected) {
+      throw new Error('WebSocket closed before streaming could start');
+    }
   }
 
   private waitForHandshake(
@@ -295,10 +303,21 @@ export class SullyStreamingDemo implements StreamingTransport {
       );
       socket.setMessageHandler((message) => {
         const value = parseStreamingMessage(message);
-        if (value?.type === 'status' && value.status === 'connected') finish();
+        if (!settled && value?.type === 'status' && value.status === 'connected') {
+          finish();
+          return;
+        }
+        if (settled) this.handleMessage(resources, message);
       });
-      socket.setErrorHandler(() => finish(new Error('WebSocket connection failed')));
-      socket.setCloseHandler(() => finish(new Error('WebSocket closed before connecting')));
+      socket.setErrorHandler(() => {
+        if (!settled) finish(new Error('WebSocket connection failed'));
+        else this.config.onStreamError?.({ message: 'Streaming socket error', fatal: false });
+      });
+      socket.setCloseHandler(() => {
+        resources.socketDisconnected = true;
+        if (!settled) finish(new Error('WebSocket closed before connecting'));
+        else if (this.phase === 'live') this.scheduleReconnect(resources);
+      });
     });
   }
 
@@ -353,7 +372,10 @@ export class SullyStreamingDemo implements StreamingTransport {
   }
 
   private scheduleReconnect(resources: StreamingGenerationResources): void {
-    if (!this.isCurrent(resources) || this.phase !== 'live') return;
+    if (
+      !this.isCurrent(resources) ||
+      (this.phase !== 'live' && this.phase !== 'reconnecting')
+    ) return;
     if (resources.retryCount >= MAX_RECONNECT_ATTEMPTS) {
       this.config.onError?.(new Error('Connection lost after reconnect attempts'));
       this.requestHandledStop('connection_lost');
@@ -378,6 +400,8 @@ export class SullyStreamingDemo implements StreamingTransport {
 
   private async reconnect(resources: StreamingGenerationResources): Promise<void> {
     if (!this.isCurrent(resources)) return;
+    await Promise.allSettled(this.releaseSocket(resources));
+    if (!this.isCurrent(resources)) return;
     try {
       const token = await this.config.createStreamingToken(
         this.tokenExpiresInSeconds(),
@@ -387,6 +411,7 @@ export class SullyStreamingDemo implements StreamingTransport {
       await this.openSocket(resources, token);
       if (this.isCurrent(resources)) this.setPhase('live');
     } catch (error: unknown) {
+      await Promise.allSettled(this.releaseSocket(resources));
       if (!isAbort(error) && this.isCurrent(resources)) this.scheduleReconnect(resources);
     }
   }

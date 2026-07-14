@@ -1,5 +1,12 @@
 export interface DemoLogEvent {
-  event: 'browser_open_failed' | 'request_complete' | 'server_listening' | 'startup_failed';
+  event:
+    | 'browser_open_failed'
+    | 'request_complete'
+    | 'server_listening'
+    | 'server_stopped'
+    | 'shutdown_failed'
+    | 'startup_failed'
+    | 'upload_cleanup_failed';
   requestId?: string;
   method?: string;
   path?: string;
