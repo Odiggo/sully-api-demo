@@ -84,7 +84,10 @@ test('loads bundled audio through the same transcription path', async ({ page })
   await expect(page.getByRole('tabpanel', { name: 'Transcription' })).toContainText(
     'Patient reports mild asthma.',
   );
-  expect(requests.map(({ path }) => path)).toEqual(['/api/transcriptions']);
+  expect(requests.map(({ path }) => path)).toEqual([
+    '/api/transcriptions',
+    '/api/transcriptions/tr_demo',
+  ]);
 });
 
 test('ships a valid JSON Schema example for text-to-JSON', async ({ page }) => {
