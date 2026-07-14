@@ -65,3 +65,21 @@ test('parseStreamingTokenResponse rejects invalid payloads', () => {
     /Invalid streaming token response/,
   );
 });
+
+test('parseStreamingTokenResponse rejects unapproved URLs and credential-shaped extras', () => {
+  for (const value of [
+    {
+      token: 'token_123',
+      apiUrl: 'https://attacker.example/v1',
+      accountId: 'acct_123',
+    },
+    {
+      token: 'token_123',
+      apiUrl: 'https://api.sully.ai/v1',
+      accountId: 'acct_123',
+      apiKey: 'must-not-cross',
+    },
+  ]) {
+    assert.throws(() => parseStreamingTokenResponse({ value }), /Invalid streaming token response/);
+  }
+});
