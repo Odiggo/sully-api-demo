@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createAppLifecycle, type AppDisposable } from '../browser/app-lifecycle.js';
+import {
+  createAppLifecycle,
+  createPageLifecycleHandlers,
+  type AppDisposable,
+} from '../browser/app-lifecycle.js';
 import { createWorkspaceState } from '../browser/workspace-state.js';
 
 function disposable(name: string, events: string[], reject = false): AppDisposable {
@@ -40,4 +44,23 @@ test('late registration is disposed immediately after lifecycle closes', async (
   await lifecycle.dispose();
   await lifecycle.add(disposable('late', events));
   assert.deepEqual(events, ['late']);
+});
+
+test('page lifecycle reloads a document restored from the back-forward cache', async () => {
+  const events: string[] = [];
+  const lifecycle = createAppLifecycle({
+    workspace: createWorkspaceState(),
+    disposables: [disposable('dispose', events)],
+  });
+  const handlers = createPageLifecycleHandlers({
+    lifecycle,
+    reload: () => events.push('reload'),
+  });
+
+  handlers.onPageHide();
+  await lifecycle.dispose();
+  handlers.onPageShow({ persisted: false });
+  handlers.onPageShow({ persisted: true });
+
+  assert.deepEqual(events, ['dispose', 'reload']);
 });

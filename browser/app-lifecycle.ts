@@ -14,6 +14,29 @@ export interface CreateAppLifecycleOptions {
   disposables?: AppDisposable[];
 }
 
+export interface CreatePageLifecycleHandlersOptions {
+  lifecycle: AppLifecycle;
+  reload(): void;
+}
+
+export interface PageLifecycleHandlers {
+  onPageHide(): void;
+  onPageShow(event: Pick<PageTransitionEvent, 'persisted'>): void;
+}
+
+export function createPageLifecycleHandlers(
+  options: CreatePageLifecycleHandlersOptions,
+): PageLifecycleHandlers {
+  return {
+    onPageHide() {
+      void options.lifecycle.dispose();
+    },
+    onPageShow(event) {
+      if (event.persisted) options.reload();
+    },
+  };
+}
+
 export function createAppLifecycle(options: CreateAppLifecycleOptions): AppLifecycle {
   const disposables = [...(options.disposables ?? [])];
   let disposal: Promise<void> | undefined;

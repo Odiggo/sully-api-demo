@@ -5,7 +5,6 @@ import type {
 } from './streaming-types.js';
 
 export interface StreamingGenerationResources {
-  id: number;
   controller: AbortController;
   recorder?: RecorderPort;
   recorderStarted: boolean;

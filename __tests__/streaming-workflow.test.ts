@@ -14,10 +14,12 @@ import { createStreamingCoordinator } from '../browser/workflows/streaming-workf
 
 function deferred<Value>() {
   let resolve: (value: Value) => void = () => undefined;
-  const promise = new Promise<Value>((next) => {
+  let reject: (error: unknown) => void = () => undefined;
+  const promise = new Promise<Value>((next, fail) => {
     resolve = next;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 interface HarnessOptions {
@@ -27,6 +29,7 @@ interface HarnessOptions {
   connectSocket?: boolean;
   closeAfterConnect?: boolean;
   closeAfterConnectAttempt?: number;
+  recorderFailsAfterAcquire?: boolean;
   timers?: StreamingTimers;
 }
 
@@ -45,6 +48,7 @@ function createTransportHarness(options: HarnessOptions = {}) {
       counts.recorder += 1;
       await (options.recorder?.promise ?? Promise.resolve());
       recorderStarted = true;
+      if (options.recorderFailsAfterAcquire) throw new Error('recorder setup failed after acquire');
     },
     stop() {
       counts.recorderStop += 1;
@@ -210,6 +214,19 @@ test('stop while recorder permission is pending releases late recorder without l
   assert(!phases.includes('live'));
 });
 
+test('stop releases a recorder that acquires media before rejecting late', async () => {
+  const recorder = deferred<void>();
+  const harness = createTransportHarness({ recorder, recorderFailsAfterAcquire: true });
+  const starting = harness.transport.start();
+  while (harness.counts.recorder === 0) await Promise.resolve();
+  await harness.transport.stop('pagehide');
+  recorder.resolve();
+  await starting;
+
+  assert.equal(harness.counts.recorderStop, 1);
+  assert.equal(harness.transport.getPhase(), 'idle');
+});
+
 test('concurrent start and repeated stop own one generation, then restart fresh', async () => {
   const harness = createTransportHarness();
   await Promise.all([harness.transport.start(), harness.transport.start()]);
@@ -349,10 +366,10 @@ test('immediate close during reconnect schedules exactly one next attempt', asyn
 });
 
 for (const failingStep of ['recorder', 'audio', 'socket', 'listener'] as const) {
-  test(`cleanup continues when ${failingStep} release fails`, async () => {
+  test(`cleanup contains ${failingStep} failure and blocks unsafe restart`, async () => {
     const harness = createTransportHarness({ failRelease: failingStep });
     await harness.transport.start();
-    await harness.transport.stop('manual');
+    await assert.rejects(harness.transport.stop('manual'), AggregateError);
     assert.deepEqual(
       {
         recorder: harness.counts.recorderStop,
@@ -360,9 +377,12 @@ for (const failingStep of ['recorder', 'audio', 'socket', 'listener'] as const) 
         socket: harness.counts.socketClose,
         complete: harness.counts.complete,
       },
-      { recorder: 1, audio: 1, socket: 1, complete: 1 },
+      { recorder: 1, audio: 1, socket: 1, complete: 0 },
     );
     assert.equal(harness.errors.length, 1);
+    assert.equal(harness.transport.getPhase(), 'error');
+    await assert.rejects(harness.transport.start(), /reload/i);
+    assert.equal(harness.counts.token, 1);
   });
 }
 

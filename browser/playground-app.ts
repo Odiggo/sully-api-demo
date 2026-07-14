@@ -1,4 +1,8 @@
-import { createAppLifecycle, type AppDisposable } from './app-lifecycle.js';
+import {
+  createAppLifecycle,
+  createPageLifecycleHandlers,
+  type AppDisposable,
+} from './app-lifecycle.js';
 import { createPlaygroundApi } from './playground-api.js';
 import { createResultView, type ResultView } from './result-view.js';
 import { createWorkflowNavigation, type WorkflowNavigation } from './workflow-navigation.js';
@@ -144,6 +148,7 @@ async function bootstrap(): Promise<void> {
     createTextToJsonWorkflow(),
   ];
   const initialWorkflow = workflowFromHash();
+  const resultOptions = createResultOptions();
   const navigation = createWorkflowNavigation({
     initial: initialWorkflow,
     workflows: controllers,
@@ -152,12 +157,14 @@ async function bootstrap(): Promise<void> {
       applyActiveWorkflow(registry, id);
       history.replaceState(null, '', `#${id}`);
     },
+    onError: () => {
+      resultOptions.showError('Current workflow could not stop safely. Reload before switching.');
+    },
   });
   const lifecycle = createAppLifecycle({ workspace, disposables: controllers });
   void lifecycle.add(mountTabControls(registry, navigation));
   for (const result of registry.results.values()) void lifecycle.add(result);
 
-  const resultOptions = createResultOptions();
   for (const controller of controllers) {
     const form = registry.forms.get(controller.id);
     const panel = registry.panels.get(controller.id);
@@ -175,7 +182,12 @@ async function bootstrap(): Promise<void> {
     });
   }
   applyActiveWorkflow(registry, initialWorkflow);
-  window.addEventListener('pagehide', () => void lifecycle.dispose(), { once: true });
+  const pageLifecycle = createPageLifecycleHandlers({
+    lifecycle,
+    reload: () => location.reload(),
+  });
+  window.addEventListener('pagehide', pageLifecycle.onPageHide, { once: true });
+  window.addEventListener('pageshow', pageLifecycle.onPageShow);
 
   try {
     const health = await api.getHealth();

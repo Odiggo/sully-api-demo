@@ -61,3 +61,28 @@ test('same-workflow activation is idempotent', async () => {
   assert.equal(await navigation.activate('coding'), true);
   assert.deepEqual(events, []);
 });
+
+test('failed deactivation stays on source workflow and reports the error', async () => {
+  const errors: unknown[] = [];
+  const navigation = createWorkflowNavigation({
+    initial: 'streaming',
+    workflows: [
+      {
+        id: 'streaming',
+        canDeactivate: async () => true,
+        deactivate: async () => {
+          throw new Error('cleanup failed');
+        },
+      },
+      workflow('notes', []),
+    ],
+    workspace: createWorkspaceState(),
+    onActivate: () => undefined,
+    onError: (error) => errors.push(error),
+  });
+
+  assert.equal(await navigation.activate('notes'), false);
+  assert.equal(navigation.current(), 'streaming');
+  assert.equal(errors.length, 1);
+  assert.match(String(errors[0]), /cleanup failed/);
+});

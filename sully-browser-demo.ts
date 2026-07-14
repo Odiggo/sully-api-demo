@@ -49,7 +49,7 @@ function isAbort(error: unknown): boolean {
 
 export class SullyStreamingDemo implements StreamingTransport {
   private phase: SessionPhase = 'idle';
-  private generation = 0;
+  private cleanupFailed = false;
   private resources?: StreamingGenerationResources;
   private startPromise?: Promise<void>;
   private readonly dependencies: StreamingDependencies;
@@ -104,10 +104,12 @@ export class SullyStreamingDemo implements StreamingTransport {
   }
 
   start(): Promise<void> {
+    if (this.cleanupFailed) {
+      return Promise.reject(new Error('Streaming cleanup failed. Reload before starting again.'));
+    }
     if (this.startPromise && this.phase !== 'idle' && this.phase !== 'error') return this.startPromise;
     if (this.phase === 'live' || this.phase === 'reconnecting') return Promise.resolve();
     const resources: StreamingGenerationResources = {
-      id: ++this.generation,
       controller: new AbortController(),
       recorderStarted: false,
       recorderStopped: false,
@@ -158,7 +160,14 @@ export class SullyStreamingDemo implements StreamingTransport {
       this.setPhase('live');
       this.startAutoStopTimer(resources);
     } catch (error: unknown) {
-      if (isAbort(error) || resources.controller.signal.aborted) return;
+      if (isAbort(error) || resources.controller.signal.aborted) {
+        await resources.stopPromise?.catch(() => undefined);
+        const failures = await this.cleanupResources(resources);
+        if (failures.length > 0) {
+          this.markCleanupFailure(resources, failures);
+        }
+        return;
+      }
       const safe = friendlyMicError(error);
       this.config.onError?.(safe);
       await this.stopResources(resources, 'error');
@@ -182,7 +191,7 @@ export class SullyStreamingDemo implements StreamingTransport {
     }
     resources.stopPromise = this.cleanupResources(resources).then((failures) => {
       if (failures.length > 0) {
-        this.config.onError?.(new AggregateError(failures, 'Streaming cleanup failed'));
+        throw this.markCleanupFailure(resources, failures);
       }
       if (!resources.completionEmitted) {
         resources.completionEmitted = true;
@@ -194,6 +203,20 @@ export class SullyStreamingDemo implements StreamingTransport {
       }
     });
     return resources.stopPromise;
+  }
+
+  private markCleanupFailure(
+    resources: StreamingGenerationResources,
+    failures: unknown[],
+  ): AggregateError {
+    this.cleanupFailed = true;
+    const error = new AggregateError(failures, 'Streaming cleanup failed');
+    if (this.resources === resources) {
+      this.startPromise = undefined;
+      this.setPhase('error');
+    }
+    this.config.onError?.(error);
+    return error;
   }
 
   private async cleanupResources(resources: StreamingGenerationResources): Promise<unknown[]> {

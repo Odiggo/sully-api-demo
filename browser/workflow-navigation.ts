@@ -16,6 +16,7 @@ export interface CreateWorkflowNavigationOptions {
   workflows: NavigationWorkflow[];
   workspace: WorkspaceState;
   onActivate: (workflow: WorkflowId) => void;
+  onError?: (error: unknown) => void;
 }
 
 export function createWorkflowNavigation(
@@ -42,9 +43,14 @@ export function createWorkflowNavigation(
   return {
     activate(target) {
       if (transition) return transition;
-      transition = change(target).finally(() => {
-        transition = undefined;
-      });
+      transition = change(target)
+        .catch((error: unknown) => {
+          options.onError?.(error);
+          return false;
+        })
+        .finally(() => {
+          transition = undefined;
+        });
       return transition;
     },
     current: () => current,
