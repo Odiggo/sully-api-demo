@@ -91,6 +91,8 @@ pnpm start:note        # legacy CLI note example
 pnpm start:stream      # legacy CLI streaming example
 ```
 
+Pull requests run the same typecheck, build, test, and Chromium E2E gates in GitHub Actions.
+
 Playwright tests need Chromium once per machine:
 
 ```bash
