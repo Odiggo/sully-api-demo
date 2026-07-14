@@ -37,13 +37,13 @@ const uploadFieldsSchema = z.strictObject({
 });
 
 const AUDIO_TYPES = [
-  { extension: '.wav', mimeTypes: ['audio/wav', 'audio/x-wav'] },
-  { extension: '.mp3', mimeTypes: ['audio/mpeg'] },
+  { extension: '.wav', mimeTypes: ['audio/wav', 'audio/wave', 'audio/x-wav'] },
+  { extension: '.mp3', mimeTypes: ['audio/mpeg', 'audio/mp3'] },
   { extension: '.flac', mimeTypes: ['audio/flac', 'audio/x-flac'] },
   { extension: '.ogg', mimeTypes: ['audio/ogg'] },
   { extension: '.webm', mimeTypes: ['audio/webm'] },
   { extension: '.mp4', mimeTypes: ['audio/mp4', 'video/mp4'] },
-  { extension: '.m4a', mimeTypes: ['audio/mp4', 'audio/x-m4a'] },
+  { extension: '.m4a', mimeTypes: ['audio/m4a', 'audio/mp4', 'audio/x-m4a'] },
   { extension: '.aac', mimeTypes: ['audio/aac'] },
   { extension: '.opus', mimeTypes: ['audio/opus', 'audio/ogg'] },
 ] as const;

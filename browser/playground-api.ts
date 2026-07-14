@@ -3,6 +3,7 @@ import { type ZodType } from 'zod';
 import {
   MAX_AUDIO_FILE_BYTES,
   apiErrorSchema,
+  codingCreateResponseSchema,
   codingIdSchema,
   codingRequestSchema,
   codingResponseSchema,
@@ -17,6 +18,7 @@ import {
   textToJsonResponseSchema,
   transcriptionIdSchema,
   transcriptionResponseSchema,
+  type CodingCreateResponse,
   type CodingRequest,
   type CodingResponse,
   type HealthResponse,
@@ -59,7 +61,7 @@ export interface PlaygroundApi {
   getTranscription(id: string, signal?: AbortSignal): Promise<TranscriptionResponse>;
   createNote(input: NoteRequest, signal?: AbortSignal): Promise<NoteCreateResponse>;
   getNote(id: string, signal?: AbortSignal): Promise<NoteResponse>;
-  createCoding(input: CodingRequest, signal?: AbortSignal): Promise<CodingResponse>;
+  createCoding(input: CodingRequest, signal?: AbortSignal): Promise<CodingCreateResponse>;
   getCoding(id: string, signal?: AbortSignal): Promise<CodingResponse>;
   textToJson(input: TextToJsonRequest, signal?: AbortSignal): Promise<TextToJsonResponse>;
   loadSampleAudio(signal?: AbortSignal): Promise<File>;
@@ -248,7 +250,7 @@ function createApiMethods(execute: Execute, json: JsonRequest, post: JsonPost): 
         signal,
       ),
     createCoding: (input, signal) =>
-      post('/api/codings', codingRequestSchema.parse(input), codingResponseSchema, signal),
+      post('/api/codings', codingRequestSchema.parse(input), codingCreateResponseSchema, signal),
     getCoding: (id, signal) =>
       json(
         `/api/codings/${encodeURIComponent(codingIdSchema.parse(id))}`,

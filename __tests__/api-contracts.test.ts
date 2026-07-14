@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
+import { SUPPORTED_LANGUAGES } from '../languages.js';
 import {
   apiErrorSchema,
+  codingCreateResponseSchema,
   codingIdSchema,
   codingRequestSchema,
   codingResponseSchema,
@@ -17,6 +19,7 @@ import {
   textToJsonRequestSchema,
   textToJsonResponseSchema,
   transcriptionIdSchema,
+  TRANSCRIPTION_LANGUAGES,
   transcriptionLanguageSchema,
   transcriptionResponseSchema,
   upstreamStreamingTokenSchema,
@@ -122,7 +125,15 @@ describe('streaming token contracts', () => {
 describe('transcription contracts', () => {
   test('accepts documented upload languages and rejects unknown tags', () => {
     assert.equal(transcriptionLanguageSchema.parse('en-US'), 'en-US');
-    assertRejects(transcriptionLanguageSchema, ['', ' ', 'EN', 'ar', null]);
+    assert.equal(TRANSCRIPTION_LANGUAGES.length, 89);
+    for (const language of ['ar', 'ar-AE', 'ar-IR', 'bn', 'gu-IN', 'mr', 'ur']) {
+      assert.equal(transcriptionLanguageSchema.parse(language), language);
+    }
+    assert.deepEqual(
+      [...SUPPORTED_LANGUAGES.flatMap((language) => language.tags)].sort(),
+      [...TRANSCRIPTION_LANGUAGES].sort(),
+    );
+    assertRejects(transcriptionLanguageSchema, ['', ' ', 'EN', 'multi', null]);
   });
 
   test('accepts pending, processing, completed, and failed provider states', () => {
@@ -351,6 +362,23 @@ describe('coding contracts', () => {
       },
     });
     assert.equal(completed.data.status, 'completed');
+  });
+
+  test('separates create complete from retrieval completed states', () => {
+    const created = {
+      data: {
+        id: 'coding_ABC123',
+        status: 'complete',
+        created_at: timestamp,
+        updated_at: timestamp,
+      },
+    };
+    assert.equal(codingCreateResponseSchema.parse(created).data.status, 'complete');
+    assert.equal(codingResponseSchema.safeParse(created).success, false);
+    assert.equal(
+      codingCreateResponseSchema.safeParse({ ...created, data: { ...created.data, status: 'completed' } }).success,
+      false,
+    );
   });
 
   test('rejects completed response without result and reversed source spans', () => {

@@ -7,6 +7,7 @@ import nodeFetch, { type RequestInit, type Response } from 'node-fetch';
 import { type ZodType } from 'zod';
 
 import {
+  type CodingCreateResponse,
   type CodingRequest,
   type CodingResponse,
   type NoteCreateResponse,
@@ -19,6 +20,7 @@ import {
   type TranscriptionResponse,
   type UpstreamStreamingToken,
   codingIdSchema,
+  codingCreateResponseSchema,
   codingResponseSchema,
   noteCreateResponseSchema,
   noteIdSchema,
@@ -71,7 +73,7 @@ export interface SullyApiClient {
   getTranscription(id: string, context: SullyRequestContext): Promise<TranscriptionResponse>;
   createNote(input: NoteRequest, context: SullyRequestContext): Promise<NoteCreateResponse>;
   getNote(id: string, context: SullyRequestContext): Promise<NoteResponse>;
-  createCoding(input: CodingRequest, context: SullyRequestContext): Promise<CodingResponse>;
+  createCoding(input: CodingRequest, context: SullyRequestContext): Promise<CodingCreateResponse>;
   getCoding(id: string, context: SullyRequestContext): Promise<CodingResponse>;
   textToJson(input: TextToJsonRequest, context: SullyRequestContext): Promise<TextToJsonResponse>;
   createStreamingToken(
@@ -305,7 +307,7 @@ function createRestMethods(request: RequestOwner): Omit<SullyApiClient, 'createT
       request({
         path: SULLY_UPSTREAM_ROUTES.codings,
         method: 'POST',
-        schema: codingResponseSchema,
+        schema: codingCreateResponseSchema,
         context,
         body: JSON.stringify(input),
         headers: { 'Content-Type': 'application/json' },

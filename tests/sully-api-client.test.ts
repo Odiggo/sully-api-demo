@@ -31,6 +31,9 @@ const NOTE = {
 const CODING = {
   data: { id: 'coding_abc123', status: 'processing', created_at: TIMESTAMP, updated_at: TIMESTAMP },
 };
+const CODING_CREATED = {
+  data: { id: 'coding_abc123', status: 'complete', created_at: TIMESTAMP, updated_at: TIMESTAMP },
+};
 const TEXT_JSON = { data: { answer: 42 } };
 const TOKEN = { token: 'stream-token' };
 
@@ -79,7 +82,7 @@ test('uses every documented upstream method/path and attaches auth once', async 
       [`GET ${SULLY_UPSTREAM_ROUTES.transcription('tr_abc123')}`]: TRANSCRIPTION,
       [`POST ${SULLY_UPSTREAM_ROUTES.notes}`]: NOTE_CREATED,
       [`GET ${SULLY_UPSTREAM_ROUTES.note('note_abc123')}`]: NOTE,
-      [`POST ${SULLY_UPSTREAM_ROUTES.codings}`]: CODING,
+      [`POST ${SULLY_UPSTREAM_ROUTES.codings}`]: CODING_CREATED,
       [`GET ${SULLY_UPSTREAM_ROUTES.coding('coding_abc123')}`]: CODING,
       [`POST ${SULLY_UPSTREAM_ROUTES.textToJson}`]: TEXT_JSON,
       [`POST ${SULLY_UPSTREAM_ROUTES.streamingToken}`]: TOKEN,

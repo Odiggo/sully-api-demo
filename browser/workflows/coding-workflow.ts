@@ -25,17 +25,16 @@ export function createCodingWorkflow() {
       const request = buildCodingRequest(input.value);
       context.workspace.setInput('coding', request.text);
       const created = await context.api.createCoding(request, signal);
-      const final = classify(created) === 'pending'
-        ? await pollUntilComplete({
-            operation: (pollSignal) => context.api.getCoding(created.data.id, pollSignal),
-            classify,
-            intervalMs: POLL_INTERVAL_MS,
-            deadlineMs: NOTE_AND_CODING_TIMEOUT_MS,
-            signal,
-            now: () => performance.now(),
-            sleep,
-          })
-        : created;
+      if (created.data.status === 'failed') throw new PollFailedError(created);
+      const final = await pollUntilComplete({
+        operation: (pollSignal) => context.api.getCoding(created.data.id, pollSignal),
+        classify,
+        intervalMs: POLL_INTERVAL_MS,
+        deadlineMs: NOTE_AND_CODING_TIMEOUT_MS,
+        signal,
+        now: () => performance.now(),
+        sleep,
+      });
       if (final.data.status !== 'completed') throw new PollFailedError(final);
       const formatted = formatCodingResult(final.data.result);
       return {

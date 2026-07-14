@@ -49,6 +49,15 @@ const codingBaseShape = {
   processing_time_ms: z.number().finite().nonnegative().optional(),
 };
 
+const codingCreateDataSchema = z.looseObject({
+  ...codingBaseShape,
+  status: z.enum(['pending', 'processing', 'complete', 'failed']),
+});
+
+export const codingCreateResponseSchema = z.looseObject({ data: codingCreateDataSchema });
+
+export type CodingCreateResponse = z.infer<typeof codingCreateResponseSchema>;
+
 const codingDataSchema = z.union([
   z.looseObject({ ...codingBaseShape, status: z.enum(['pending', 'processing', 'failed']) }),
   z.looseObject({

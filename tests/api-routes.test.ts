@@ -336,12 +336,16 @@ test('accepts every documented audio MIME and extension pair', async (t) => {
   t.after(harness.close);
   const audioTypes = [
     ['audio/wav', 'wav'],
+    ['audio/wave', 'wav'],
+    ['audio/x-wav', 'wav'],
     ['audio/mpeg', 'mp3'],
+    ['audio/mp3', 'mp3'],
     ['audio/flac', 'flac'],
     ['audio/ogg', 'ogg'],
     ['audio/webm', 'webm'],
     ['video/mp4', 'mp4'],
     ['audio/x-m4a', 'm4a'],
+    ['audio/m4a', 'm4a'],
     ['audio/aac', 'aac'],
     ['audio/opus', 'opus'],
   ];
