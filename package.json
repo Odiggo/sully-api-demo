@@ -27,12 +27,12 @@
     "@speechmatics/browser-audio-input": "^2.0.3",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "form-data": "^4.0.1",
+    "express": "^4.22.2",
+    "form-data": "^4.0.6",
     "multer": "^2.2.0",
     "node-fetch": "^3.3.2",
     "node-microphone": "^0.1.6",
-    "ws": "^8.18.0",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -43,8 +43,8 @@
     "@types/node": "^22.9.0",
     "@types/node-microphone": "^0.1.4",
     "@types/ws": "^8.5.13",
-    "esbuild": "^0.27.3",
-    "tsx": "^4.19.2",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.1",
     "typescript": "^5.6.3"
   },
   "pnpm": {
