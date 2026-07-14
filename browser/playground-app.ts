@@ -11,6 +11,10 @@ import {
   createPlaceholderWorkflow,
   type WorkflowController,
 } from './workflows/workflow-controller.js';
+import { createCodingWorkflow } from './workflows/coding-workflow.js';
+import { createNoteWorkflow } from './workflows/note-workflow.js';
+import { createTextToJsonWorkflow } from './workflows/text-to-json-workflow.js';
+import { createTranscriptionWorkflow } from './workflows/transcription-workflow.js';
 
 interface DomRegistry {
   tabs: Map<WorkflowId, HTMLButtonElement>;
@@ -41,7 +45,7 @@ function createResultOptions() {
     },
     showError(message: string) {
       alert.textContent = message;
-      alert.hidden = false;
+      alert.hidden = message.length === 0;
     },
   };
 }
@@ -134,7 +138,13 @@ async function bootstrap(): Promise<void> {
   const api = createPlaygroundApi({ fetch: globalThis.fetch.bind(globalThis) });
   const workspace = createWorkspaceState();
   const registry = createDomRegistry();
-  const controllers: WorkflowController[] = WORKFLOW_IDS.map(createPlaceholderWorkflow);
+  const controllers: WorkflowController[] = [
+    createPlaceholderWorkflow('streaming'),
+    createTranscriptionWorkflow(),
+    createNoteWorkflow(),
+    createCodingWorkflow(),
+    createTextToJsonWorkflow(),
+  ];
   const initialWorkflow = workflowFromHash();
   const navigation = createWorkflowNavigation({
     initial: initialWorkflow,
