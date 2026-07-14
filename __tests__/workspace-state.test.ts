@@ -14,16 +14,12 @@ test('replacement run aborts prior work and rejects stale writes', () => {
   assert.deepEqual(state.snapshot().notes.output, { markdown: 'new' });
 });
 
-test('handoff transfers exact text only after explicit action without storage writes', () => {
-  const writes: string[] = [];
-  const state = createWorkspaceState({
-    storage: { setItem: (key) => writes.push(key) },
-  });
+test('handoff transfers exact text only after explicit action', () => {
+  const state = createWorkspaceState();
   state.setOutput('transcription', { text: 'Patient text' });
   assert.equal(state.snapshot().notes.input, '');
   assert.equal(state.handoff({ from: 'transcription', to: 'notes' }), true);
   assert.equal(state.snapshot().notes.input, 'Patient text');
-  assert.deepEqual(writes, []);
 });
 
 test('normalizes note JSON handoff only when explicitly requested', () => {

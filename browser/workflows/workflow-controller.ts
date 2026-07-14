@@ -18,20 +18,3 @@ export interface WorkflowController extends NavigationWorkflow {
   mount(context: WorkflowContext): void;
   dispose(): Promise<void>;
 }
-
-export function createPlaceholderWorkflow(id: WorkflowId): WorkflowController {
-  let form: HTMLFormElement | undefined;
-  const preventSubmit = (event: SubmitEvent) => event.preventDefault();
-  return {
-    id,
-    mount(context) {
-      form = context.form;
-      form.addEventListener('submit', preventSubmit);
-    },
-    canDeactivate: async () => true,
-    deactivate: async () => undefined,
-    async dispose() {
-      form?.removeEventListener('submit', preventSubmit);
-    },
-  };
-}

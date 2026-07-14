@@ -1,3 +1,4 @@
+import { MULTILINGUAL_LANGUAGE_TAG, SUPPORTED_LANGUAGES } from '../languages.js';
 import {
   createAppLifecycle,
   createPageLifecycleHandlers,
@@ -32,6 +33,36 @@ function requireElement<ElementType extends Element>(
   const element = root.querySelector<ElementType>(selector);
   if (!element) throw new Error(`Playground is missing ${selector}`);
   return element;
+}
+
+function populateTranscriptionLanguages(): void {
+  const populate = (workflow: 'streaming' | 'transcription', includeMultilingual: boolean) => {
+    const select = requireElement<HTMLSelectElement>(
+      `[data-workflow-form="${workflow}"] select[name="language"]`,
+    );
+    const options: Array<HTMLOptionElement | HTMLOptGroupElement> = [];
+    if (includeMultilingual) {
+      const automatic = document.createElement('option');
+      automatic.value = MULTILINGUAL_LANGUAGE_TAG;
+      automatic.textContent = 'Auto-detect multilingual (multi)';
+      options.push(automatic);
+    }
+    for (const language of SUPPORTED_LANGUAGES) {
+      const group = document.createElement('optgroup');
+      group.label = language.name;
+      for (const tag of language.tags) {
+        const option = document.createElement('option');
+        option.value = tag;
+        option.textContent = `${language.name} (${tag})`;
+        group.append(option);
+      }
+      options.push(group);
+    }
+    select.replaceChildren(...options);
+    select.value = 'en';
+  };
+  populate('streaming', true);
+  populate('transcription', false);
 }
 
 function createResultOptions() {
@@ -138,6 +169,7 @@ function updateReadiness(ready: boolean, diagnostics: string[]): void {
 
 async function bootstrap(): Promise<void> {
   const api = createPlaygroundApi({ fetch: globalThis.fetch.bind(globalThis) });
+  populateTranscriptionLanguages();
   const workspace = createWorkspaceState();
   const registry = createDomRegistry();
   const controllers: WorkflowController[] = [

@@ -27,6 +27,28 @@ test('states credential and transient upload boundaries precisely', async ({ pag
   await expect(page.locator('main')).not.toContainText('Clinical dataMemory only');
 });
 
+test('exposes live streaming status and transcript updates to assistive technology', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('[data-result-view="streaming"] [data-result-status]')).toHaveAttribute(
+    'role',
+    'status',
+  );
+  await expect(page.locator('[data-result-view="streaming"] [data-result-formatted]')).toHaveAttribute(
+    'aria-live',
+    'polite',
+  );
+});
+
+test('offers every documented transcription locale plus streaming auto-detect', async ({ page }) => {
+  await page.goto('/');
+  const streaming = page.locator('[data-workflow-form="streaming"] select[name="language"]');
+  const upload = page.locator('[data-workflow-form="transcription"] select[name="language"]');
+  await expect(streaming.locator('option')).toHaveCount(90);
+  await expect(upload.locator('option')).toHaveCount(89);
+  await expect(streaming.locator('option[value="multi"]')).toHaveCount(1);
+  await expect(upload.locator('option[value="ar-AE"]')).toHaveCount(1);
+});
+
 test('has no automatically detectable WCAG A/AA violations', async ({ page }) => {
   await page.goto('/');
   const results = await new AxeBuilder({ page })

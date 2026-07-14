@@ -24,6 +24,7 @@ test('runs transcription, note handoff, note generation, and coding', async ({ p
   await expect(page.getByRole('textbox', { name: 'Transcript', exact: true })).toHaveValue(
     'Patient reports mild asthma.',
   );
+  await expect(page.getByRole('textbox', { name: 'Transcript', exact: true })).toBeFocused();
 
   await page.getByLabel('Encounter date').fill('2026-07-13');
   await page.getByRole('button', { name: 'Generate note' }).click();
@@ -35,11 +36,13 @@ test('runs transcription, note handoff, note generation, and coding', async ({ p
 
   expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
     'POST /api/transcriptions',
+    'GET /api/transcriptions/tr_demo',
     'POST /api/notes',
     'GET /api/notes/note_demo',
     'POST /api/codings',
+    'GET /api/codings/coding_demo',
   ]);
-  expect(requests[1]?.body).toEqual({
+  expect(requests[2]?.body).toEqual({
     transcript: 'Patient reports mild asthma.',
     date: '2026-07-13',
     language: 'en',
@@ -49,7 +52,27 @@ test('runs transcription, note handoff, note generation, and coding', async ({ p
       includeJson: false,
     },
   });
-  expect(requests[3]?.body).toEqual({ text: '## Assessment\nMild asthma.' });
+  expect(requests[4]?.body).toEqual({ text: '## Assessment\nMild asthma.' });
+});
+
+test('leaving transcription aborts a pending sample without a hidden announcement', async ({ page }) => {
+  let releaseSample: (() => void) | undefined;
+  await page.route('**/samples/demo-audio.wav', async (route) => {
+    await new Promise<void>((resolve) => {
+      releaseSample = resolve;
+    });
+    await route.fulfill({
+      body: 'RIFF',
+      contentType: 'audio/wav',
+    }).catch(() => undefined);
+  });
+  await page.goto('/#transcription');
+  await page.getByRole('button', { name: 'Use bundled sample' }).click();
+  await page.getByRole('tab', { name: /Note generation/ }).click();
+  releaseSample?.();
+  await page.waitForTimeout(50);
+
+  await expect(page.locator('[data-announcer]')).not.toContainText('Bundled sample audio selected');
 });
 
 test('loads bundled audio through the same transcription path', async ({ page }) => {

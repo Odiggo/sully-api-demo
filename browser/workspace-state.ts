@@ -35,10 +35,6 @@ export interface Handoff {
   to: WorkflowId;
 }
 
-export interface StoragePort {
-  setItem(key: string, value: string): void;
-}
-
 export interface WorkspaceState {
   beginRun(workflow: WorkflowId): RunTicket;
   completeRun(ticket: RunTicket, result: unknown): boolean;
@@ -49,10 +45,6 @@ export interface WorkspaceState {
   handoff(input: Handoff): boolean;
   snapshot(): WorkspaceSnapshot;
   dispose(): void;
-}
-
-export interface CreateWorkspaceStateOptions {
-  storage?: StoragePort;
 }
 
 function initialSnapshot(): WorkspaceSnapshot {
@@ -84,9 +76,7 @@ function handoffText(output: unknown): string | undefined {
   return undefined;
 }
 
-export function createWorkspaceState(
-  _options: CreateWorkspaceStateOptions = {},
-): WorkspaceState {
+export function createWorkspaceState(): WorkspaceState {
   const state = initialSnapshot();
   const active = new Map<WorkflowId, OwnedRun>();
   let generation = 0;

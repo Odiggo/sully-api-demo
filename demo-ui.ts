@@ -14,30 +14,71 @@ export interface StreamingPreferences {
 
 const ALLOWED_TOKEN_EXPIRIES = new Set([300, 3_600, 86_400]);
 
-export function loadStreamingPreferences(): StreamingPreferences {
+export interface PreferenceStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+function browserStorage(): PreferenceStorage | undefined {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function readStorage(storage: PreferenceStorage | undefined, key: string): string | null {
+  try {
+    return storage?.getItem(key) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(
+  storage: PreferenceStorage | undefined,
+  key: string,
+  value: string,
+): void {
+  try {
+    storage?.setItem(key, value);
+  } catch {
+    // Preferences remain optional when browser storage is unavailable.
+  }
+}
+
+export function loadStreamingPreferences(
+  storage: PreferenceStorage | undefined = browserStorage(),
+): StreamingPreferences {
   const tokenValue = Number.parseInt(
-    localStorage.getItem(STREAMING_STORAGE_KEYS.tokenExpiresIn) ?? '',
+    readStorage(storage, STREAMING_STORAGE_KEYS.tokenExpiresIn) ?? '',
     10,
   );
   return {
-    language: localStorage.getItem(STREAMING_STORAGE_KEYS.language) ?? 'en',
+    language: readStorage(storage, STREAMING_STORAGE_KEYS.language) ?? 'en',
     tokenExpiresIn: ALLOWED_TOKEN_EXPIRIES.has(tokenValue) ? tokenValue : 3_600,
-    dictation: localStorage.getItem(STREAMING_STORAGE_KEYS.dictation) !== 'false',
-    wordDebug: localStorage.getItem(STREAMING_STORAGE_KEYS.wordDebug) === 'true',
+    dictation: readStorage(storage, STREAMING_STORAGE_KEYS.dictation) !== 'false',
+    wordDebug: readStorage(storage, STREAMING_STORAGE_KEYS.wordDebug) === 'true',
   };
 }
 
-export function saveStreamingPreferences(preferences: StreamingPreferences): void {
-  localStorage.setItem(STREAMING_STORAGE_KEYS.language, preferences.language);
-  localStorage.setItem(
+export function saveStreamingPreferences(
+  preferences: StreamingPreferences,
+  storage: PreferenceStorage | undefined = browserStorage(),
+): void {
+  writeStorage(storage, STREAMING_STORAGE_KEYS.language, preferences.language);
+  writeStorage(
+    storage,
     STREAMING_STORAGE_KEYS.tokenExpiresIn,
     String(preferences.tokenExpiresIn),
   );
-  localStorage.setItem(
+  writeStorage(
+    storage,
     STREAMING_STORAGE_KEYS.dictation,
     String(preferences.dictation),
   );
-  localStorage.setItem(
+  writeStorage(
+    storage,
     STREAMING_STORAGE_KEYS.wordDebug,
     String(preferences.wordDebug),
   );

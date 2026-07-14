@@ -66,6 +66,56 @@ test('stops at exact deadline without another operation', async () => {
   assert.equal(calls, 5);
 });
 
+test('rejects a complete value returned after the deadline', async () => {
+  let now = 0;
+  await assert.rejects(
+    pollUntilComplete({
+      operation: async () => {
+        now = 10_001;
+        return 'complete';
+      },
+      classify: () => 'complete',
+      intervalMs: 2_000,
+      deadlineMs: 10_000,
+      now: () => now,
+      sleep: async () => undefined,
+    }),
+    PollTimeoutError,
+  );
+});
+
+test('deadline aborts and rejects an operation that never settles', async () => {
+  let deadline: (() => void) | undefined;
+  let operationSignal: AbortSignal | undefined;
+  let clearCalls = 0;
+  const result = pollUntilComplete({
+    operation: async (signal) => {
+      operationSignal = signal;
+      return new Promise<string>(() => undefined);
+    },
+    classify: () => 'pending',
+    intervalMs: 2_000,
+    deadlineMs: 10_000,
+    now: () => 0,
+    sleep: async () => undefined,
+    timers: {
+      setTimeout(callback, milliseconds) {
+        assert.equal(milliseconds, 10_000);
+        deadline = callback;
+        return 1;
+      },
+      clearTimeout() {
+        clearCalls += 1;
+      },
+    },
+  });
+
+  deadline?.();
+  await assert.rejects(result, PollTimeoutError);
+  assert.equal(operationSignal?.aborted, true);
+  assert.equal(clearCalls, 1);
+});
+
 test('surfaces failed terminal value without another poll', async () => {
   const failed = { status: 'failed' };
   await assert.rejects(

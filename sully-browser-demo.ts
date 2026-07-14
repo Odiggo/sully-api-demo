@@ -389,7 +389,11 @@ export class SullyStreamingDemo implements StreamingTransport {
   }
 
   private handleAudio(resources: StreamingGenerationResources, samples: Float32Array): void {
-    if (!this.isCurrent(resources) || resources.socket?.readyState !== SOCKET_OPEN) return;
+    if (
+      samples.length === 0 ||
+      !this.isCurrent(resources) ||
+      resources.socket?.readyState !== SOCKET_OPEN
+    ) return;
     if (this.config.onAudioLevel) this.config.onAudioLevel(streamingAudioLevel(samples));
     resources.socket.send(JSON.stringify({ audio: encodeStreamingAudio(samples) }));
   }

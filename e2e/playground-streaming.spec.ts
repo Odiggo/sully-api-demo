@@ -55,6 +55,49 @@ test('requires explicit stop before switching during pending start', async ({ pa
   expect(tokenCalls).toBe(1);
 });
 
+test('escape cancels a reopened stop dialog after an earlier confirmation', async ({ page }) => {
+  const releases: Array<() => void> = [];
+  await page.route('**/api/streaming-token', async (route) => {
+    await new Promise<void>((resolve) => releases.push(resolve));
+    await route.fulfill({
+      json: {
+        token: 'late-token',
+        apiUrl: 'https://api-testing.sully.ai/v1',
+        accountId: 'account',
+      },
+    }).catch(() => undefined);
+  });
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Start recording' }).click();
+  await page.getByRole('tab', { name: /Transcription/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Stop and switch' }).click();
+  releases.shift()?.();
+  await page.getByRole('tab', { name: /Live streaming/ }).click();
+
+  await page.getByRole('button', { name: 'Start recording' }).click();
+  await page.getByRole('tab', { name: /Transcription/ }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tab', { name: /Live streaming/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  releases.shift()?.();
+});
+
+test('space on a link does not trigger streaming', async ({ page }) => {
+  let tokenCalls = 0;
+  await page.route('**/api/streaming-token', async (route) => {
+    tokenCalls += 1;
+    await route.abort();
+  });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Sully API Playground home' }).focus();
+  await page.keyboard.press('Space');
+  expect(tokenCalls).toBe(0);
+});
+
 test('persists only non-clinical streaming preferences', async ({ page }) => {
   await page.goto('/');
   await page.getByLabel('Language').first().selectOption('es');

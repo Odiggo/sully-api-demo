@@ -24,41 +24,57 @@ function classify(response: TranscriptionResponse): 'pending' | 'complete' | 'fa
 export function createTranscriptionWorkflow() {
   let sampleFile: File | undefined;
   let sampleController: AbortController | undefined;
+  let sampleButton: HTMLButtonElement | undefined;
+  const cancelSampleLoad = () => {
+    sampleController?.abort();
+    sampleController = undefined;
+    if (sampleButton) sampleButton.disabled = false;
+  };
 
   return createFormWorkflow({
     id: 'transcription',
     loadingMessage: 'Transcribing',
     mountExtra(context) {
-      const sampleButton = requireControl<HTMLButtonElement>(context.form, '[data-use-sample]');
+      const button = requireControl<HTMLButtonElement>(context.form, '[data-use-sample]');
+      sampleButton = button;
       const fileInput = requireControl<HTMLInputElement>(context.form, 'input[name="audio"]');
       const useSample = async () => {
-        sampleController?.abort();
-        sampleController = new AbortController();
-        sampleButton.disabled = true;
+        cancelSampleLoad();
+        const controller = new AbortController();
+        sampleController = controller;
+        button.disabled = true;
         try {
-          sampleFile = await context.api.loadSampleAudio(sampleController.signal);
-          sampleButton.textContent = 'Bundled sample selected';
+          const loaded = await context.api.loadSampleAudio(controller.signal);
+          if (controller.signal.aborted || sampleController !== controller) return;
+          sampleFile = loaded;
+          button.textContent = 'Bundled sample selected';
           context.announce('Bundled sample audio selected');
         } catch (error: unknown) {
-          if (!sampleController.signal.aborted) {
+          if (!controller.signal.aborted && sampleController === controller) {
             context.showError(error instanceof Error ? error.message : 'Unable to load sample audio.');
           }
         } finally {
-          sampleButton.disabled = false;
+          if (sampleController === controller) {
+            sampleController = undefined;
+            button.disabled = false;
+          }
         }
       };
       const useUpload = () => {
+        cancelSampleLoad();
         sampleFile = undefined;
-        sampleButton.textContent = 'Use bundled sample';
+        button.textContent = 'Use bundled sample';
       };
-      sampleButton.addEventListener('click', useSample);
+      button.addEventListener('click', useSample);
       fileInput.addEventListener('change', useUpload);
       return () => {
-        sampleController?.abort();
-        sampleButton.removeEventListener('click', useSample);
+        cancelSampleLoad();
+        button.removeEventListener('click', useSample);
         fileInput.removeEventListener('change', useUpload);
+        sampleButton = undefined;
       };
     },
+    deactivateExtra: cancelSampleLoad,
     async run(context, signal) {
       const fileInput = requireControl<HTMLInputElement>(context.form, 'input[name="audio"]');
       const language = requireControl<HTMLSelectElement>(context.form, 'select[name="language"]');

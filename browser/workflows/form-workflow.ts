@@ -13,6 +13,7 @@ export interface FormWorkflowSpec {
   loadingMessage: string;
   run(context: WorkflowContext, signal: AbortSignal): Promise<WorkflowExecution>;
   mountExtra?(context: WorkflowContext): void | (() => void);
+  deactivateExtra?(): void | Promise<void>;
 }
 
 function isAbort(error: unknown): boolean {
@@ -43,15 +44,16 @@ function mountHandoffs(context: WorkflowContext): () => void {
     const from = WORKFLOW_IDS.find((id) => id === fromValue);
     const to = WORKFLOW_IDS.find((id) => id === toValue);
     if (!from || !to || from !== context.panel.dataset.workflowPanel) continue;
-    const click = () => {
+    const click = async () => {
       if (context.workspace.handoff({ from, to })) {
         const input = targetInput(to);
         if (input) input.value = context.workspace.snapshot()[to].input;
-        void context.activate(to);
+        if (await context.activate(to)) input?.focus();
       }
     };
-    button.addEventListener('click', click);
-    cleanups.push(() => button.removeEventListener('click', click));
+    const handleClick = () => void click();
+    button.addEventListener('click', handleClick);
+    cleanups.push(() => button.removeEventListener('click', handleClick));
   }
   return () => cleanups.forEach((cleanup) => cleanup());
 }
@@ -104,9 +106,11 @@ export function createFormWorkflow(spec: FormWorkflowSpec): WorkflowController {
     },
     canDeactivate: async () => true,
     async deactivate() {
+      await spec.deactivateExtra?.();
       context?.workspace.abortRun(spec.id);
     },
     async dispose() {
+      await spec.deactivateExtra?.();
       context?.workspace.abortRun(spec.id);
       context?.form.removeEventListener('submit', submit);
       removeExtra?.();

@@ -9,8 +9,11 @@ import {
   type StreamingDependencies,
   type StreamingTimers,
 } from '../sully-browser-demo.js';
-import { encodeStreamingAudio } from '../streaming-audio.js';
-import { createStreamingCoordinator } from '../browser/workflows/streaming-workflow.js';
+import { encodeStreamingAudio, streamingAudioLevel } from '../streaming-audio.js';
+import {
+  createStreamingCoordinator,
+  createStreamingRawPayload,
+} from '../browser/workflows/streaming-workflow.js';
 
 function deferred<Value>() {
   let resolve: (value: Value) => void = () => undefined;
@@ -34,7 +37,7 @@ interface HarnessOptions {
 }
 
 function createTransportHarness(options: HarnessOptions = {}) {
-  const counts = { token: 0, recorder: 0, recorderStop: 0, audio: 0, audioClose: 0, socket: 0, socketClose: 0, complete: 0 };
+  const counts = { token: 0, recorder: 0, recorderStop: 0, audio: 0, audioClose: 0, socket: 0, socketClose: 0, send: 0, complete: 0 };
   const socketUrls: string[] = [];
   let tokenSignal: AbortSignal | undefined;
   let audioHandler: ((samples: Float32Array) => void) | undefined;
@@ -86,7 +89,9 @@ function createTransportHarness(options: HarnessOptions = {}) {
       closeHandler = handler;
     },
     setErrorHandler() {},
-    send() {},
+    send() {
+      counts.send += 1;
+    },
     close() {
       counts.socketClose += 1;
       if (options.failRelease === 'socket') throw new Error('socket release failed');
@@ -150,6 +155,22 @@ test('encodes documented little-endian linear16 audio', () => {
     [bytes.readInt16LE(0), bytes.readInt16LE(2), bytes.readInt16LE(4)],
     [-32_768, 0, 32_767],
   );
+});
+
+test('ignores empty audio frames without emitting NaN or socket data', async () => {
+  const harness = createTransportHarness();
+  await harness.transport.start();
+  assert.equal(streamingAudioLevel(new Float32Array()), 0);
+  harness.audioHandler()?.(new Float32Array());
+  assert.equal(harness.counts.send, 0);
+  await harness.transport.stop('manual');
+});
+
+test('word details stay excluded from both live and completed raw payloads when disabled', () => {
+  const segments = [{ text: 'Hello', isFinal: true }];
+  const words = [{ word: 'Hello', start: 0, end: 0.5, confidence: 0.99 }];
+  assert.deepEqual(createStreamingRawPayload(segments, words, false), { segments });
+  assert.deepEqual(createStreamingRawPayload(segments, words, true), { segments, words });
 });
 
 test('opens streaming socket with documented linear16 encoding', async () => {

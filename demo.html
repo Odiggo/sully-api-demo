@@ -108,9 +108,9 @@
               <p class="form-hint">Your browser asks for microphone access when recording starts.</p>
             </form>
             <section class="result-view live-result" aria-labelledby="streaming-result-title" data-result-view="streaming">
-              <header class="result-header"><div><span class="result-kicker">Live output</span><h3 id="streaming-result-title">Transcript</h3></div><span class="result-status" data-result-status>Ready</span></header>
+              <header class="result-header"><div><span class="result-kicker">Live output</span><h3 id="streaming-result-title">Transcript</h3></div><span class="result-status" role="status" aria-live="polite" data-result-status>Ready</span></header>
               <div class="result-empty" data-result-empty>Start recording to see live transcript text.</div>
-              <pre class="result-formatted" data-result-formatted hidden></pre>
+              <pre class="result-formatted" aria-live="polite" aria-atomic="false" data-result-formatted hidden></pre>
               <details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details>
               <footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button></footer>
             </section>

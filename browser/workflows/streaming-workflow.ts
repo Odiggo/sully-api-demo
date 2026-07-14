@@ -71,20 +71,18 @@ function createDialogConfirmation(): () => Promise<boolean> {
         },
         { once: true },
       );
+      dialog.returnValue = '';
       dialog.showModal();
     });
     return pending;
   };
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLSelectElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLButtonElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  );
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest(
+    'a, button, input, select, textarea, summary, label, dialog, [contenteditable]:not([contenteditable="false"]), [role], [tabindex]',
+  ) !== null;
 }
 
 interface StreamingWorkflowState {
@@ -107,6 +105,22 @@ interface StreamingControls {
   persist(): void;
 }
 
+export function createStreamingRawPayload(
+  segments: TranscriptSegment[],
+  words: TranscriptWord[] | undefined,
+  includeWords: boolean,
+): { segments: TranscriptSegment[]; words?: TranscriptWord[] } {
+  return includeWords ? { segments, words } : { segments };
+}
+
+function rawPayload(state: StreamingWorkflowState) {
+  const context = state.context;
+  const includeWords = context
+    ? requireControl<HTMLInputElement>(context.form, 'input[name="wordDebug"]').checked
+    : false;
+  return createStreamingRawPayload(state.segments, state.words, includeWords);
+}
+
 function updateControls(state: StreamingWorkflowState, nextPhase: SessionPhase): void {
   const context = state.context;
   if (!context) return;
@@ -126,12 +140,11 @@ function renderTranscript(state: StreamingWorkflowState): void {
   const { context, ticket } = state;
   if (!context || !ticket || ticket.signal.aborted) return;
   const text = joinTranscriptSegments(state.segments);
-  const debug = requireControl<HTMLInputElement>(context.form, 'input[name="wordDebug"]');
   context.workspace.setOutput('streaming', { text });
   context.result.setLive({
     formatted: text || 'Listening…',
     copyText: text,
-    raw: debug.checked ? { segments: state.segments, words: state.words } : { segments: state.segments },
+    raw: rawPayload(state),
   });
 }
 
@@ -161,7 +174,7 @@ function createTransportConfig(state: StreamingWorkflowState): StreamingConfig {
       if (!context || !ticket) return;
       const text = joinTranscriptSegments(state.segments);
       if (!context.workspace.completeRun(ticket, { text })) return;
-      if (text) context.result.setResult({ formatted: text, raw: { segments: state.segments, words: state.words } });
+      if (text) context.result.setResult({ formatted: text, raw: rawPayload(state) });
       else context.result.clear('Start recording to see live transcript text.');
     },
   };
@@ -226,7 +239,7 @@ function bindControls(state: StreamingWorkflowState, controls: StreamingControls
     renderTranscript(state);
   };
   const keydown = (event: KeyboardEvent) => {
-    if (context.panel.hidden || event.code !== 'Space' || isEditableTarget(event.target)) return;
+    if (context.panel.hidden || event.code !== 'Space' || isInteractiveTarget(event.target)) return;
     event.preventDefault();
     if (state.phase === 'idle' || state.phase === 'error') context.form.requestSubmit();
     else requestStop('manual');
