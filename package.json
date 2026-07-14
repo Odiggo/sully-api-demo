@@ -9,13 +9,14 @@
   },
   "scripts": {
     "build": "pnpm build:client && pnpm build:server",
-    "build:client": "esbuild browser/playground-app.ts --bundle --outfile=dist/demo-app.js --platform=browser --target=es2021 --format=esm",
+    "build:client": "esbuild browser/playground-app.ts --bundle --outfile=dist/client/playground-app.js --platform=browser --target=es2021 --format=esm",
     "build:server": "tsc -p tsconfig.server.json",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.browser.json --noEmit",
     "test:unit": "tsx --test __tests__/*.test.ts",
-    "test": "pnpm test:unit",
+    "test:integration": "tsx --test tests/*.test.ts",
+    "test": "pnpm test:unit && pnpm test:integration",
     "test:e2e": "pnpm build && playwright test",
-    "start": "pnpm build && node dist/server.js",
+    "start": "pnpm build && node dist/server/server.js",
     "start:note": "tsx sully-demo.ts note",
     "start:stream": "tsx sully-demo.ts stream"
   },
@@ -45,5 +46,10 @@
     "esbuild": "^0.27.3",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/multer>@types/express": "4.17.25"
+    }
   }
 }
