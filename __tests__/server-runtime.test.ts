@@ -8,8 +8,10 @@ import express from 'express';
 import type { DemoLogEvent, DemoLogger } from '../server/demo-logger.js';
 import {
   LOOPBACK_HOST,
+  SHUTDOWN_GRACE_MS,
   createProcessUploadDirectory,
   registerGracefulShutdown,
+  startManagedServer,
   startServer,
 } from '../server/server-runtime.js';
 import type { ServerConfig } from '../server/server-config.js';
@@ -40,56 +42,67 @@ function loggerHarness(): { logger: DemoLogger; events: DemoLogEvent[] } {
   };
 }
 
-test('binds only loopback and does not open browser when disabled', async (t) => {
-  let openCalls = 0;
+test('binds only loopback', async (t) => {
   const harness = loggerHarness();
   const server = await startServer({
     app: express(),
     config: testConfig(false),
-    openUrl: async () => {
-      openCalls += 1;
-    },
     logger: harness.logger,
   });
   t.after(() => closeServer(server));
   const address = server.address();
   assert(address && typeof address === 'object');
   assert.equal(address.address, LOOPBACK_HOST);
-  assert.equal(openCalls, 0);
   assert.deepEqual(harness.events, [
     { event: 'server_listening', port: address.port },
   ]);
 });
 
-test('opens the actual ephemeral URL once after listener readiness', async (t) => {
-  const opened: string[] = [];
+test('managed startup registers shutdown before opening the actual URL', async (t) => {
+  const order: string[] = [];
+  const listeners = new Map<NodeJS.Signals, () => void>();
   const harness = loggerHarness();
-  const server = await startServer({
+  const runtime = await startManagedServer({
     app: express(),
     config: testConfig(true),
     openUrl: async (url) => {
-      opened.push(url);
+      assert(listeners.has('SIGINT'));
+      assert(listeners.has('SIGTERM'));
+      order.push(url);
     },
     logger: harness.logger,
+    signalSource: {
+      once: (signal, listener) => listeners.set(signal, listener),
+      off: (signal, listener) => {
+        if (listeners.get(signal) === listener) listeners.delete(signal);
+      },
+    },
+    cleanup: async () => undefined,
+    setExitCode: () => undefined,
   });
-  t.after(() => closeServer(server));
-  const address = server.address();
+  runtime.shutdown.dispose();
+  t.after(() => closeServer(runtime.server));
+  const address = runtime.server.address();
   assert(address && typeof address === 'object');
-  assert.deepEqual(opened, [`http://${LOOPBACK_HOST}:${address.port}/`]);
+  assert.deepEqual(order, [`http://${LOOPBACK_HOST}:${address.port}/`]);
 });
 
 test('browser opener rejection warns safely without stopping listener', async (t) => {
   const harness = loggerHarness();
-  const server = await startServer({
+  const runtime = await startManagedServer({
     app: express(),
     config: testConfig(true),
     openUrl: async () => {
       throw new Error('/private/path secret-key');
     },
     logger: harness.logger,
+    signalSource: { once: () => undefined, off: () => undefined },
+    cleanup: async () => undefined,
+    setExitCode: () => undefined,
   });
-  t.after(() => closeServer(server));
-  assert.equal(server.listening, true);
+  runtime.shutdown.dispose();
+  t.after(() => closeServer(runtime.server));
+  assert.equal(runtime.server.listening, true);
   const serialized = JSON.stringify(harness.events);
   assert.match(serialized, /browser_open_failed/);
   assert(!serialized.includes('/private/path'));
@@ -107,7 +120,6 @@ test('binding failure rejects startup', async (t) => {
     startServer({
       app: express(),
       config: { ...testConfig(false), port: address.port },
-      openUrl: async () => undefined,
       logger: harness.logger,
     }),
   );
@@ -124,6 +136,9 @@ test('termination signal drains server before cleaning uploads exactly once', as
         order.push('close');
         finishClose = callback;
       },
+      closeAllConnections() {
+        order.push('force');
+      },
     },
     signalSource: {
       once: (signal, listener) => listeners.set(signal, listener),
@@ -136,6 +151,15 @@ test('termination signal drains server before cleaning uploads exactly once', as
     },
     logger: harness.logger,
     setExitCode: (code) => order.push(`exit:${code}`),
+    timers: {
+      setTimeout(callback, milliseconds) {
+        assert.equal(milliseconds, SHUTDOWN_GRACE_MS);
+        return callback;
+      },
+      clearTimeout() {
+        order.push('clear-timeout');
+      },
+    },
   });
 
   const terminate = listeners.get('SIGTERM');
@@ -146,7 +170,7 @@ test('termination signal drains server before cleaning uploads exactly once', as
   assert.equal(listeners.size, 0);
   finishClose?.();
   await registration.completion;
-  assert.deepEqual(order, ['close', 'cleanup']);
+  assert.deepEqual(order, ['close', 'clear-timeout', 'cleanup']);
   assert(JSON.stringify(harness.events).includes('server_stopped'));
 });
 
@@ -155,7 +179,7 @@ test('shutdown failure is safe and sets a failing exit code', async () => {
   let terminate: (() => void) | undefined;
   const exitCodes: number[] = [];
   const registration = registerGracefulShutdown({
-    server: { close: (callback) => callback() },
+    server: { close: (callback) => callback(), closeAllConnections: () => undefined },
     signalSource: {
       once: (_signal, listener) => {
         terminate = listener;
@@ -183,7 +207,10 @@ test('server-close failure still cleans uploads before failing shutdown', async 
   let cleanupCalls = 0;
   const exitCodes: number[] = [];
   const registration = registerGracefulShutdown({
-    server: { close: (callback) => callback(new Error('close failed')) },
+    server: {
+      close: (callback) => callback(new Error('close failed')),
+      closeAllConnections: () => undefined,
+    },
     signalSource: {
       once: (_signal, listener) => {
         terminate = listener;
@@ -202,6 +229,44 @@ test('server-close failure still cleans uploads before failing shutdown', async 
   assert.equal(cleanupCalls, 1);
   assert.deepEqual(exitCodes, [1]);
   assert(JSON.stringify(harness.events).includes('shutdown_failed'));
+});
+
+test('shutdown forces active connections at the exact grace deadline', async () => {
+  const order: string[] = [];
+  let terminate: (() => void) | undefined;
+  let deadline: (() => void) | undefined;
+  const registration = registerGracefulShutdown({
+    server: {
+      close: () => order.push('close'),
+      closeAllConnections: () => order.push('force'),
+    },
+    signalSource: {
+      once: (_signal, listener) => {
+        terminate = listener;
+      },
+      off: () => undefined,
+    },
+    cleanup: async () => {
+      order.push('cleanup');
+    },
+    logger: loggerHarness().logger,
+    setExitCode: () => undefined,
+    timers: {
+      setTimeout(callback, milliseconds) {
+        assert.equal(milliseconds, SHUTDOWN_GRACE_MS);
+        deadline = callback;
+        return 1;
+      },
+      clearTimeout: () => order.push('clear-timeout'),
+    },
+  });
+
+  terminate?.();
+  await Promise.resolve();
+  assert.deepEqual(order, ['close']);
+  deadline?.();
+  await registration.completion;
+  assert.deepEqual(order, ['close', 'force', 'cleanup']);
 });
 
 test('each server process owns a distinct upload directory', async (t) => {

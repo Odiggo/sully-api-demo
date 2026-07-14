@@ -9,8 +9,7 @@ import { loadServerConfig } from './server/server-config.js';
 import {
   createProcessUploadDirectory,
   openExternalUrl,
-  registerGracefulShutdown,
-  startServer,
+  startManagedServer,
 } from './server/server-runtime.js';
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -28,9 +27,11 @@ async function main(): Promise<void> {
       rootDirectory,
       createRequestId: randomUUID,
     });
-    const server = await startServer({ app, config, openUrl: openExternalUrl, logger });
-    registerGracefulShutdown({
-      server,
+    await startManagedServer({
+      app,
+      config,
+      openUrl: openExternalUrl,
+      logger,
       signalSource: {
         once: (signal, listener) => {
           process.once(signal, listener);
@@ -40,7 +41,6 @@ async function main(): Promise<void> {
         },
       },
       cleanup: () => rm(uploadDirectory, { recursive: true, force: true }),
-      logger,
       setExitCode: (code) => {
         process.exitCode = code;
       },

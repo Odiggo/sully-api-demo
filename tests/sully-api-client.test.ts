@@ -14,6 +14,8 @@ import {
   MAX_UPSTREAM_RESPONSE_BYTES,
   SULLY_UPSTREAM_ROUTES,
   SullyApiError,
+  UPSTREAM_JSON_REQUEST_TIMEOUT_MS,
+  UPSTREAM_UPLOAD_REQUEST_TIMEOUT_MS,
   createSullyApiClient,
   type NodeFetch,
 } from '../server/sully-api-client.js';
@@ -69,6 +71,7 @@ function respondJson(response: ServerResponse, body: unknown, status = 200): voi
 
 test('uses every documented upstream method/path and attaches auth once', async (t) => {
   const seen: SeenRequest[] = [];
+  const timeoutDelays: number[] = [];
   const upstream = await startUpstream((request, response) => {
     seen.push({
       method: request.method ?? '',
@@ -101,6 +104,13 @@ test('uses every documented upstream method/path and attaches auth once', async 
     apiKey: 'secret-key',
     accountId: 'account-1',
     fetch: nodeFetch,
+    timers: {
+      setTimeout(_callback, milliseconds) {
+        timeoutDelays.push(milliseconds);
+        return timeoutDelays.length;
+      },
+      clearTimeout: () => undefined,
+    },
   });
   const context = { requestId: 'request-1' };
 
@@ -148,6 +158,10 @@ test('uses every documented upstream method/path and attaches auth once', async 
     assert.equal(request.apiKey, 'secret-key');
     assert.equal(request.accountId, 'account-1');
   }
+  assert.deepEqual(timeoutDelays, [
+    UPSTREAM_UPLOAD_REQUEST_TIMEOUT_MS,
+    ...Array<number>(7).fill(UPSTREAM_JSON_REQUEST_TIMEOUT_MS),
+  ]);
 });
 
 test('rejects redirects before custom credential headers can leave approved origin', async (t) => {

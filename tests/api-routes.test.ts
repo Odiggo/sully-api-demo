@@ -18,7 +18,7 @@ import {
   type NoteRequest,
   type TextToJsonRequest,
 } from '../contracts/index.js';
-import { createServerApp } from '../server/server-app.js';
+import { MAX_JSON_BODY_BYTES, createServerApp } from '../server/server-app.js';
 import { SullyApiError, type SullyApiClient, type TranscriptionUpload } from '../server/sully-api-client.js';
 import type { ServerConfig } from '../server/server-config.js';
 import type { DemoLogEvent, DemoLogger } from '../server/demo-logger.js';
@@ -296,7 +296,21 @@ test('maps all JSON workflow routes and rejects invalid IDs and bodies', async (
 test('bounds JSON bodies and returns browser-safe streaming credentials only', async (t) => {
   const harness = await createHarness();
   t.after(harness.close);
-  const oversized = await fetch(`${harness.url}/api/codings`, jsonRequest({ text: 'x'.repeat(65_537) }));
+  const jsonAtSize = (size: number) => {
+    const framing = '{"padding":""}';
+    return `{"padding":"${'x'.repeat(size - Buffer.byteLength(framing))}"}`;
+  };
+  const exact = await fetch(`${harness.url}/api/codings`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: jsonAtSize(MAX_JSON_BODY_BYTES),
+  });
+  assert.equal(exact.status, 400);
+  const oversized = await fetch(`${harness.url}/api/codings`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: jsonAtSize(MAX_JSON_BODY_BYTES + 1),
+  });
   assert.equal(oversized.status, 413);
 
   const streaming = await fetch(
