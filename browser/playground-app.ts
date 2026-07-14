@@ -7,14 +7,12 @@ import {
   createWorkspaceState,
   type WorkflowId,
 } from './workspace-state.js';
-import {
-  createPlaceholderWorkflow,
-  type WorkflowController,
-} from './workflows/workflow-controller.js';
+import type { WorkflowController } from './workflows/workflow-controller.js';
 import { createCodingWorkflow } from './workflows/coding-workflow.js';
 import { createNoteWorkflow } from './workflows/note-workflow.js';
 import { createTextToJsonWorkflow } from './workflows/text-to-json-workflow.js';
 import { createTranscriptionWorkflow } from './workflows/transcription-workflow.js';
+import { createStreamingWorkflow } from './workflows/streaming-workflow.js';
 
 interface DomRegistry {
   tabs: Map<WorkflowId, HTMLButtonElement>;
@@ -139,7 +137,7 @@ async function bootstrap(): Promise<void> {
   const workspace = createWorkspaceState();
   const registry = createDomRegistry();
   const controllers: WorkflowController[] = [
-    createPlaceholderWorkflow('streaming'),
+    createStreamingWorkflow(),
     createTranscriptionWorkflow(),
     createNoteWorkflow(),
     createCodingWorkflow(),

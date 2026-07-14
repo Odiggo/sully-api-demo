@@ -19,7 +19,6 @@
   ],
   "exclude": [
     "browser/**",
-    "demo-app.ts",
     "demo-ui.ts",
     "sully-browser-demo.ts",
     "node_modules",

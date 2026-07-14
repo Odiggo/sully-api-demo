@@ -18,6 +18,7 @@ export interface ResultPayload {
 
 export interface ResultView {
   setLoading(message?: string): void;
+  setLive(payload: ResultPayload): void;
   setResult(payload: ResultPayload): void;
   setError(message: string): void;
   clear(message?: string): void;
@@ -86,6 +87,20 @@ export function createResultView(
   };
   copy.addEventListener('click', handleCopy);
 
+  const renderPayload = (payload: ResultPayload) => {
+    formatted.textContent = payload.formatted;
+    formatted.hidden = false;
+    empty.hidden = true;
+    if (payload.raw === undefined) {
+      rawWrap.hidden = true;
+    } else {
+      raw.textContent = rawText(payload.raw);
+      rawWrap.hidden = false;
+    }
+    copyText = payload.copyText ?? payload.formatted;
+    copy.disabled = copyText.length === 0;
+  };
+
   return {
     setLoading(message = 'Working') {
       setStatus(message, 'running');
@@ -95,19 +110,13 @@ export function createResultView(
       rawWrap.hidden = true;
       copy.disabled = true;
     },
+    setLive(payload) {
+      setStatus('Live', 'running');
+      renderPayload(payload);
+    },
     setResult(payload) {
       setStatus('Complete', 'complete');
-      formatted.textContent = payload.formatted;
-      formatted.hidden = false;
-      empty.hidden = true;
-      if (payload.raw === undefined) {
-        rawWrap.hidden = true;
-      } else {
-        raw.textContent = rawText(payload.raw);
-        rawWrap.hidden = false;
-      }
-      copyText = payload.copyText ?? payload.formatted;
-      copy.disabled = copyText.length === 0;
+      renderPayload(payload);
     },
     setError(message) {
       setStatus('Error', 'error');

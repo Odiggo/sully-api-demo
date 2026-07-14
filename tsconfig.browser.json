@@ -10,7 +10,6 @@
   "include": [
     "browser/**/*.ts",
     "contracts/**/*.ts",
-    "demo-app.ts",
     "demo-ui.ts",
     "sully-browser-demo.ts",
     "streaming-client.ts",
