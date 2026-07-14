@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import express, { type NextFunction, type Request, type Response } from 'express';
 
+import { isLoopbackHostname } from '../contracts/index.js';
 import type { DemoLogger } from './demo-logger.js';
 import { createApiRouter, sendServerError } from './api-routes.js';
 import { createSullyApiClient, type SullyApiClient } from './sully-api-client.js';
@@ -11,7 +12,6 @@ import { type ServerConfig, toHealthResponse } from './server-config.js';
 
 export const MAX_JSON_BODY_BYTES = 65_536;
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,128}$/;
-const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
 export interface CreateServerAppOptions {
   config: ServerConfig;
@@ -35,7 +35,7 @@ function hostnameFromHostHeader(host: string): string | undefined {
 function isAllowedLocalHost(host: string | undefined): boolean {
   if (!host) return false;
   const hostname = hostnameFromHostHeader(host);
-  return hostname !== undefined && LOOPBACK_HOSTNAMES.has(hostname);
+  return hostname !== undefined && isLoopbackHostname(hostname);
 }
 
 function isSameLocalOrigin(origin: string, host: string): boolean {
@@ -43,7 +43,7 @@ function isSameLocalOrigin(origin: string, host: string): boolean {
     const parsed = new URL(origin);
     return (
       (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-      LOOPBACK_HOSTNAMES.has(parsed.hostname) &&
+      isLoopbackHostname(parsed.hostname) &&
       parsed.host === host
     );
   } catch {

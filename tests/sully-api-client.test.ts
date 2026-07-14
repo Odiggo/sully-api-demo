@@ -185,6 +185,25 @@ test('rejects unapproved API destinations before creating a request owner', () =
   );
 });
 
+test('snapshots the approved API origin before request credentials are attached', async () => {
+  const configuredUrl = new URL('http://127.0.0.1:3001');
+  let requestedUrl = '';
+  const client = createSullyApiClient({
+    apiUrl: configuredUrl,
+    apiKey: 'secret',
+    accountId: 'account',
+    fetch: async (url) => {
+      requestedUrl = String(url);
+      return new Response(JSON.stringify(TRANSCRIPTION));
+    },
+  });
+
+  configuredUrl.hostname = 'attacker.example';
+  await client.getTranscription('tr_abc123', { requestId: 'req-origin-snapshot' });
+
+  assert.equal(requestedUrl, 'http://127.0.0.1:3001/v2/audio/transcriptions/tr_abc123');
+});
+
 test('accepts split multibyte UTF-8 and unknown provider fields', async (t) => {
   const json = JSON.stringify({ ...TRANSCRIPTION, future: 'café' });
   const bytes = Buffer.from(json);

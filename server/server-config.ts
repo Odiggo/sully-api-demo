@@ -5,7 +5,7 @@ import {
   type CredentialName,
   type HealthResponse,
   healthResponseSchema,
-  isApprovedSullyOrigin,
+  parseApprovedSullyOrigin,
 } from '../contracts/index.js';
 
 export const DEFAULT_PORT = 3_000;
@@ -60,19 +60,7 @@ function normalizeCredential(value: string | undefined): string | undefined {
 }
 
 function parseApiUrl(value: string): URL | undefined {
-  try {
-    const url = new URL(value);
-    const isOriginOnly =
-      url.pathname === '/' &&
-      url.search === '' &&
-      url.hash === '' &&
-      url.username === '' &&
-      url.password === '';
-    if (!isApprovedSullyOrigin(url) || !isOriginOnly) return undefined;
-    return new URL(url.origin);
-  } catch {
-    return undefined;
-  }
+  return parseApprovedSullyOrigin(value);
 }
 
 function parseCredentials(env: NodeJS.ProcessEnv): CredentialState {

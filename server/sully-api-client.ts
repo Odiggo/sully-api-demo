@@ -20,10 +20,10 @@ import {
   type UpstreamStreamingToken,
   codingIdSchema,
   codingResponseSchema,
-  isApprovedSullyOrigin,
   noteCreateResponseSchema,
   noteIdSchema,
   noteResponseSchema,
+  parseApprovedSullyOrigin,
   streamingTokenRequestSchema,
   textToJsonResponseSchema,
   transcriptionIdSchema,
@@ -162,18 +162,6 @@ function safeJsonParse(text: string): unknown {
 
 function stopFileStream(stream: ReadStream): void {
   if (!stream.destroyed) stream.destroy();
-}
-
-function assertApprovedApiOrigin(apiUrl: URL): void {
-  const isOriginOnly =
-    apiUrl.pathname === '/' &&
-    apiUrl.search === '' &&
-    apiUrl.hash === '' &&
-    apiUrl.username === '' &&
-    apiUrl.password === '';
-  if (!isOriginOnly || !isApprovedSullyOrigin(apiUrl)) {
-    throw new Error('Sully API URL must be an approved origin');
-  }
 }
 
 type RequestOwner = <Output>(requestOptions: RequestOptions<Output>) => Promise<Output>;
@@ -351,8 +339,9 @@ function createRestMethods(request: RequestOwner): Omit<SullyApiClient, 'createT
 }
 
 export function createSullyApiClient(options: SullyApiClientOptions): SullyApiClient {
-  assertApprovedApiOrigin(options.apiUrl);
-  const request = createRequestOwner(options);
+  const apiUrl = parseApprovedSullyOrigin(options.apiUrl);
+  if (!apiUrl) throw new Error('Sully API URL must be an approved origin');
+  const request = createRequestOwner({ ...options, apiUrl });
   return {
     createTranscription: createTranscriptionMethod(
       request,
