@@ -20,7 +20,7 @@ test('exposes five keyboard-operable workflows', async ({ page }) => {
 test('states credential and transient upload boundaries precisely', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('API key', { exact: true })).toBeVisible();
-  await expect(page.getByText('Sully + temp storage', { exact: true })).toBeVisible();
+  await expect(page.getByText('Sully API · uploads temp', { exact: true })).toBeVisible();
   await expect(
     page.getByText('Local API is ready. Your API key remains on the server.'),
   ).toBeVisible();
@@ -49,10 +49,30 @@ test('offers every documented transcription locale plus streaming auto-detect', 
   await expect(upload.locator('option[value="ar-AE"]')).toHaveCount(1);
 });
 
-test('has no automatically detectable WCAG A/AA violations', async ({ page }) => {
+test('has no automatically detectable WCAG 2.2 A/AA violations initially or in dialog', async ({ page }) => {
   await page.goto('/');
   const results = await new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
+
+  await page.locator('[data-navigation-dialog]').evaluate((dialog: HTMLDialogElement) => {
+    dialog.showModal();
+  });
+  const dialogResults = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+    .analyze();
+  expect(dialogResults.violations).toEqual([]);
+});
+
+test('has no mobile overflow or automatically detectable WCAG 2.2 A/AA violations', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+  ).toBe(true);
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(results.violations).toEqual([]);
 });
@@ -79,7 +99,7 @@ test('keeps setup page usable while disabling API actions when health is not rea
     }),
   );
   await page.goto('/');
-  await expect(page.getByRole('status')).toContainText('SULLY_API_KEY');
+  await expect(page.locator('[data-setup-status]')).toContainText('SULLY_API_KEY');
   const actions = page.locator('[data-api-action]');
   await expect(actions.first()).toBeDisabled();
 });

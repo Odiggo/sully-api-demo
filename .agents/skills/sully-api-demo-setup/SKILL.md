@@ -12,7 +12,7 @@ Produce a safe, repeatable local setup without overwriting contributor state or 
 - Start at repository root. Inspect `package.json`, `.env.example`, and `.gitignore`; capture `git status --short --branch` before mutation for final comparison.
 - Preserve unrelated/untracked files. Never reset, clean, stash, or stage contributor work.
 - Never read, print, echo, diff, or log `.env` values. Report credential names only.
-- Never overwrite an existing `.env`. If present, restrict it with `chmod 600 .env` without displaying it.
+- Never overwrite an existing `.env`. If `.env` is a symlink (including broken), stop and ask the contributor to replace it with a regular local file; never read or chmod it. If `.env` is another non-regular path, stop. Restrict only a regular `.env` with `chmod 600 .env` without displaying it.
 - Process environment overrides `.env`. Detect only whether `SULLY_API_URL`, `SULLY_API_KEY`, or `SULLY_ACCOUNT_ID` names are set; never display values.
 - Use pnpm. Do not substitute npm, Bun, or Yarn.
 - Boot `pnpm start`, the browser playground. Treat `start:note` and `start:stream` as legacy, privacy-weaker examples.
@@ -39,8 +39,10 @@ Produce a safe, repeatable local setup without overwriting contributor state or 
 
 3. Configure without overwriting:
 
-   - If `.env` is absent, run `cp .env.example .env && chmod 600 .env`.
-   - If `.env` exists, run only `chmod 600 .env`.
+   - Check `.env` with `test -L .env` before any copy or chmod. A symlink means stop and ask the contributor to replace it; do not inspect its target.
+   - If `.env` is absent, run `cp -n .env.example .env && chmod 600 .env`.
+   - If `.env` is a regular file, run only `chmod 600 .env`.
+   - If `.env` exists but is not a regular file, stop and ask the contributor to resolve it.
    - Ask contributor to edit missing credentials locally. `SULLY_API_URL` must be exact approved origin (`https://api-testing.sully.ai` for testing or `https://api.sully.ai` intentionally for production), without `/v1` or `/v2`.
    - Use a names-only check for inherited overrides:
 

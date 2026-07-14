@@ -15,7 +15,15 @@ Requirements:
 
 ```bash
 pnpm install --frozen-lockfile
-cp .env.example .env
+if [ -L .env ]; then
+  echo '.env is a symlink; replace it with a regular local file before continuing' >&2
+  exit 1
+elif [ -e .env ] && [ ! -f .env ]; then
+  echo '.env exists but is not a regular file' >&2
+  exit 1
+elif [ ! -e .env ]; then
+  cp -n .env.example .env
+fi
 chmod 600 .env
 ```
 
@@ -89,6 +97,8 @@ Playwright tests need Chromium once per machine:
 pnpm exec playwright install chromium
 ```
 
+Browser tests use port `3100`; set `E2E_PORT` to another integer from 1 through 65535 when needed.
+
 The two CLI scripts are retained as legacy examples, not the main demo. They can print transcript or note content, use older example flows, and do not offer the browser playground's full workflow coverage or privacy boundaries. Prefer `pnpm start`.
 
 ## Architecture and safety boundaries
@@ -107,7 +117,7 @@ Review against Sully's current API reference found the old repo centered on thre
 
 - makes the five requested workflows first-class in one browser UI;
 - uses v2 create/get for uploaded transcription and current v1 routes for notes, coding, text-to-JSON, and streaming;
-- models documented async status families independently (`pending`/`processing`/`completed`/`failed` versus note `STATUS_*` values);
+- models endpoint-specific async states, including coding create `complete`, coding/transcription retrieval `completed`, and note `STATUS_*` values;
 - matches the documented 100 MB transcription limit and current upload formats;
 - keeps durable credentials behind a local token-broker/proxy boundary;
 - replaces setup ambiguity with pnpm/Node pins, real tests, `.env` diagnostics, and a repo-local setup skill.
