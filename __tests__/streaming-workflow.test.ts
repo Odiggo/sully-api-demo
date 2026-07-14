@@ -9,6 +9,7 @@ import {
   type StreamingDependencies,
   type StreamingTimers,
 } from '../sully-browser-demo.js';
+import { encodeStreamingAudio } from '../streaming-audio.js';
 import { createStreamingCoordinator } from '../browser/workflows/streaming-workflow.js';
 
 function deferred<Value>() {
@@ -28,6 +29,7 @@ interface HarnessOptions {
 
 function createTransportHarness(options: HarnessOptions = {}) {
   const counts = { token: 0, recorder: 0, recorderStop: 0, audio: 0, audioClose: 0, socket: 0, socketClose: 0, complete: 0 };
+  const socketUrls: string[] = [];
   let tokenSignal: AbortSignal | undefined;
   let audioHandler: ((samples: Float32Array) => void) | undefined;
   let closeHandler: (() => void) | undefined;
@@ -89,8 +91,9 @@ function createTransportHarness(options: HarnessOptions = {}) {
       counts.audio += 1;
       return audioContext;
     },
-    createSocket: () => {
+    createSocket: (url) => {
       counts.socket += 1;
+      socketUrls.push(url);
       return socket;
     },
     timers,
@@ -118,12 +121,30 @@ function createTransportHarness(options: HarnessOptions = {}) {
     transport,
     dependencies,
     counts,
+    socketUrls,
     errors,
     tokenSignal: () => tokenSignal,
     audioHandler: () => audioHandler,
     triggerSocketClose: () => closeHandler?.(),
   };
 }
+
+test('encodes documented little-endian linear16 audio', () => {
+  const encoded = encodeStreamingAudio(new Float32Array([-1, 0, 1]));
+  const bytes = Buffer.from(encoded, 'base64');
+  assert.equal(bytes.byteLength, 6);
+  assert.deepEqual(
+    [bytes.readInt16LE(0), bytes.readInt16LE(2), bytes.readInt16LE(4)],
+    [-32_768, 0, 32_767],
+  );
+});
+
+test('opens streaming socket with documented linear16 encoding', async () => {
+  const harness = createTransportHarness();
+  await harness.transport.start();
+  assert.match(harness.socketUrls[0] ?? '', /[?&]encoding=linear16(?:&|$)/);
+  await harness.transport.stop('manual');
+});
 
 test('stop during token acquisition prevents recorder and socket creation', async () => {
   const token = deferred<{ token: string; apiUrl: string; accountId: string }>();

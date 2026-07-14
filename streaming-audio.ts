@@ -5,7 +5,13 @@ export function streamingAudioLevel(samples: Float32Array): number {
 }
 
 export function encodeStreamingAudio(samples: Float32Array): string {
-  const bytes = new Uint8Array(samples.buffer);
+  const bytes = new Uint8Array(samples.length * 2);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[index] ?? 0));
+    const scaled = sample < 0 ? sample * 32_768 : sample * 32_767;
+    view.setInt16(index * 2, scaled, true);
+  }
   let binary = '';
   for (let index = 0; index < bytes.length; index += 4_096) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 4_096));

@@ -165,9 +165,16 @@
         <section id="panel-text-to-json" class="workflow-panel" role="tabpanel" aria-labelledby="tab-text-to-json" data-workflow-panel="text-to-json" hidden>
           <div class="panel-heading"><div><p class="endpoint">POST · /v1/utils/text-to-json</p><h2>Text to JSON</h2><p>Describe the object you need, supply a JSON schema, and inspect the structured result.</p></div><span class="version-badge">v1 · sync</span></div>
           <div class="workflow-grid">
-            <form class="workflow-form" data-workflow-form="text-to-json" autocomplete="off"><label class="field"><span>Source text</span><textarea name="text" rows="8" placeholder="Example: Patient is 42 years old and reports a penicillin allergy." required></textarea></label><label class="field"><span>Output schema (JSON object)</span><textarea class="code-input" name="schema" rows="9" spellcheck="false" required>{
-  "age": "number",
-  "allergies": ["string"]
+            <form class="workflow-form" data-workflow-form="text-to-json" autocomplete="off"><label class="field"><span>Source text</span><textarea name="text" rows="8" placeholder="Example: Patient is 42 years old and reports a penicillin allergy." required></textarea></label><label class="field"><span>Output schema (JSON object)</span><textarea class="code-input" name="schema" rows="14" spellcheck="false" required>{
+  "type": "object",
+  "properties": {
+    "age": { "type": "number" },
+    "allergies": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["age", "allergies"]
 }</textarea></label><div class="form-actions"><button class="primary-button" type="submit" data-api-action disabled>Convert to JSON</button></div></form>
             <section class="result-view" aria-labelledby="text-json-result-title" data-result-view="text-to-json"><header class="result-header"><div><span class="result-kicker">API output</span><h3 id="text-json-result-title">Structured JSON</h3></div><span class="result-status" data-result-status>Ready</span></header><div class="result-empty" data-result-empty>Validated JSON output will appear here.</div><pre class="result-formatted" data-result-formatted hidden></pre><details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details><footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button></footer></section>
           </div>

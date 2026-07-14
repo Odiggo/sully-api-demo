@@ -10,7 +10,7 @@ test('buildStreamingWebSocketUrl includes dictation and auth query params', () =
   const url = buildStreamingWebSocketUrl({
     apiUrl: 'https://api.sully.ai/v1',
     sampleRate: 16000,
-    encoding: 'linear32',
+    encoding: 'linear16',
     dictation: true,
     language: 'en-US',
     accountId: 'acct_123',
@@ -19,7 +19,7 @@ test('buildStreamingWebSocketUrl includes dictation and auth query params', () =
 
   assert.equal(
     url,
-    'wss://api.sully.ai/v1/audio/transcriptions/stream?sample_rate=16000&encoding=linear32&dictation=true&language=en-US&account_id=acct_123&api_token=token_456',
+    'wss://api.sully.ai/v1/audio/transcriptions/stream?sample_rate=16000&encoding=linear16&dictation=true&language=en-US&account_id=acct_123&api_token=token_456',
   );
 });
 

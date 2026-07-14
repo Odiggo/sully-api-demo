@@ -254,7 +254,7 @@ export class SullyStreamingDemo implements StreamingTransport {
     const url = buildStreamingWebSocketUrl({
       apiUrl: token.apiUrl,
       sampleRate: 16_000,
-      encoding: 'linear32',
+      encoding: 'linear16',
       dictation: this.config.dictation ?? false,
       language: this.config.language,
       accountId: token.accountId,

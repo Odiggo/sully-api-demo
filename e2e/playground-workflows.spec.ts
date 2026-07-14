@@ -64,6 +64,20 @@ test('loads bundled audio through the same transcription path', async ({ page })
   expect(requests.map(({ path }) => path)).toEqual(['/api/transcriptions']);
 });
 
+test('ships a valid JSON Schema example for text-to-JSON', async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto('/#text-to-json');
+  const value = await page.getByLabel('Output schema (JSON object)').inputValue();
+  expect(JSON.parse(value)).toEqual({
+    type: 'object',
+    properties: {
+      age: { type: 'number' },
+      allergies: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['age', 'allergies'],
+  });
+});
+
 test('validates schema locally and renders text-to-JSON output as inert text', async ({ page }) => {
   const requests = await installApiMocks(page);
   await page.goto('/#text-to-json');
@@ -73,7 +87,11 @@ test('validates schema locally and renders text-to-JSON output as inert text', a
   await expect(page.getByRole('alert')).toContainText('valid JSON object');
   expect(requests).toEqual([]);
 
-  await page.getByLabel('Output schema (JSON object)').fill('{"age":"number"}');
+  await page.getByLabel('Output schema (JSON object)').fill(`{
+    "type": "object",
+    "properties": { "age": { "type": "number" } },
+    "required": ["age"]
+  }`);
   await page.getByRole('button', { name: 'Convert to JSON' }).click();
   const panel = page.getByRole('tabpanel', { name: 'Text to JSON' });
   await expect(panel).toContainText('"age": 42');
@@ -82,6 +100,10 @@ test('validates schema locally and renders text-to-JSON output as inert text', a
   expect(requests.map(({ path }) => path)).toEqual(['/api/text-to-json']);
   expect(requests[0]?.body).toEqual({
     text: 'Patient is 42 years old.',
-    schema: { age: 'number' },
+    schema: {
+      type: 'object',
+      properties: { age: { type: 'number' } },
+      required: ['age'],
+    },
   });
 });
