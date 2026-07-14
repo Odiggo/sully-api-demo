@@ -287,6 +287,31 @@ test('rejects pre-aborted requests without calling fetch', async () => {
   assert.equal(calls, 0);
 });
 
+test('caller abort wins when upstream fetch ignores its signal and resolves late', async () => {
+  let resolveFetch: ((response: Response) => void) | undefined;
+  const client = createSullyApiClient({
+    apiUrl: new URL('http://127.0.0.1:3001'),
+    apiKey: 'key',
+    accountId: 'account',
+    fetch: async () =>
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+  });
+  const controller = new AbortController();
+  const request = client.getTranscription('tr_abc123', {
+    requestId: 'req-late-abort',
+    signal: controller.signal,
+  });
+  controller.abort();
+  resolveFetch?.(new Response(JSON.stringify(TRANSCRIPTION)));
+
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof SullyApiError && error.code === 'UPSTREAM_ABORTED',
+  );
+});
+
 test('timeout aborts transport and clears its timer', async () => {
   let timeoutCallback: (() => void) | undefined;
   let clearCalls = 0;
@@ -322,6 +347,35 @@ test('timeout aborts transport and clears its timer', async () => {
   );
   assert.equal(abortCalls, 1);
   assert.equal(clearCalls, 1);
+});
+
+test('timeout wins when upstream fetch ignores its signal and resolves late', async () => {
+  let timeoutCallback: (() => void) | undefined;
+  let resolveFetch: ((response: Response) => void) | undefined;
+  const client = createSullyApiClient({
+    apiUrl: new URL('http://127.0.0.1:3001'),
+    apiKey: 'key',
+    accountId: 'account',
+    fetch: async () =>
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    timers: {
+      setTimeout(callback) {
+        timeoutCallback = callback;
+        return 1;
+      },
+      clearTimeout() {},
+    },
+  });
+  const request = client.getTranscription('tr_abc123', { requestId: 'req-late-timeout' });
+  timeoutCallback?.();
+  resolveFetch?.(new Response(JSON.stringify(TRANSCRIPTION)));
+
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof SullyApiError && error.code === 'UPSTREAM_TIMEOUT',
+  );
 });
 
 test('caller abort while pending aborts transport and clears its timer', async () => {

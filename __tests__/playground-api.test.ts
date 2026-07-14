@@ -8,6 +8,25 @@ import {
   type BrowserFetch,
 } from '../browser/playground-api.js';
 
+function deferredErrorResponse(): { response: Response; resolveBody: () => void } {
+  let resolveBody = () => undefined;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      resolveBody = () => {
+        controller.enqueue(
+          new TextEncoder().encode(
+            JSON.stringify({
+              error: { code: 'UPSTREAM_ERROR', message: 'Rejected', requestId: 'request-1' },
+            }),
+          ),
+        );
+        controller.close();
+      };
+    },
+  });
+  return { response: new Response(body, { status: 502 }), resolveBody };
+}
+
 test('rejects malformed local API success data', async () => {
   const fetch: BrowserFetch = async () =>
     new Response(JSON.stringify({ data: { status: 'completed' } }), { status: 200 });
@@ -32,6 +51,25 @@ test('rejects a pre-aborted request before fetch', async () => {
     (error: unknown) => error instanceof PlaygroundApiError && error.code === 'LOCAL_API_ABORTED',
   );
   assert.equal(calls, 0);
+});
+
+test('caller abort wins when fetch ignores its signal and resolves late', async () => {
+  let resolveFetch: ((response: Response) => void) | undefined;
+  const api = createPlaygroundApi({
+    fetch: async () =>
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+  });
+  const controller = new AbortController();
+  const request = api.getHealth(controller.signal);
+  controller.abort();
+  resolveFetch?.(new Response(JSON.stringify({ ok: true, missing: [], invalid: [] })));
+
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof PlaygroundApiError && error.code === 'LOCAL_API_ABORTED',
+  );
 });
 
 test('aborts a local fetch at exact deadline and clears timer', async () => {
@@ -68,6 +106,71 @@ test('aborts a local fetch at exact deadline and clears timer', async () => {
   );
   assert.equal(abortCalls, 1);
   assert.equal(clearCalls, 1);
+});
+
+test('timeout wins when fetch ignores its signal and resolves late', async () => {
+  let timeoutCallback: (() => void) | undefined;
+  let resolveFetch: ((response: Response) => void) | undefined;
+  const api = createPlaygroundApi({
+    fetch: async () =>
+      new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      }),
+    timers: {
+      setTimeout(callback) {
+        timeoutCallback = callback;
+        return 1;
+      },
+      clearTimeout() {},
+    },
+  });
+  const request = api.getHealth();
+  timeoutCallback?.();
+  resolveFetch?.(new Response(JSON.stringify({ ok: true, missing: [], invalid: [] })));
+
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof PlaygroundApiError && error.code === 'LOCAL_API_TIMEOUT',
+  );
+});
+
+test('caller abort wins while a non-OK response body resolves late', async () => {
+  const deferred = deferredErrorResponse();
+  const api = createPlaygroundApi({ fetch: async () => deferred.response });
+  const controller = new AbortController();
+  const request = api.getHealth(controller.signal);
+  await Promise.resolve();
+  controller.abort();
+  deferred.resolveBody();
+
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof PlaygroundApiError && error.code === 'LOCAL_API_ABORTED',
+  );
+});
+
+test('timeout wins while a non-OK response body resolves late', async () => {
+  let timeoutCallback: (() => void) | undefined;
+  const deferred = deferredErrorResponse();
+  const api = createPlaygroundApi({
+    fetch: async () => deferred.response,
+    timers: {
+      setTimeout(callback) {
+        timeoutCallback = callback;
+        return 1;
+      },
+      clearTimeout() {},
+    },
+  });
+  const request = api.getHealth();
+  await Promise.resolve();
+  timeoutCallback?.();
+  deferred.resolveBody();
+
+  await assert.rejects(
+    request,
+    (error: unknown) => error instanceof PlaygroundApiError && error.code === 'LOCAL_API_TIMEOUT',
+  );
 });
 
 test('preserves stable server error while rejecting malformed error bodies', async () => {

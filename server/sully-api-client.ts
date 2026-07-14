@@ -204,6 +204,13 @@ function createRequestOwner(options: SullyApiClientOptions): RequestOwner {
 
     const controller = new AbortController();
     let timedOut = false;
+    const assertActive = () => {
+      if (!controller.signal.aborted) return;
+      throw new SullyApiError(
+        timedOut ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_ABORTED',
+        context.requestId,
+      );
+    };
     const abortFromCaller = () => controller.abort();
     context.signal?.addEventListener('abort', abortFromCaller, { once: true });
     const timeoutHandle = timers.setTimeout(() => {
@@ -223,7 +230,9 @@ function createRequestOwner(options: SullyApiClientOptions): RequestOwner {
         redirect: 'error',
         signal: controller.signal,
       });
+      assertActive();
       const responseText = await readBoundedResponse(response);
+      assertActive();
       if (!response.ok) {
         throw new SullyApiError(
           'UPSTREAM_HTTP_ERROR',

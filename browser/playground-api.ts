@@ -137,6 +137,13 @@ function createExecute(options: CreatePlaygroundApiOptions): Execute {
     }
     const controller = new AbortController();
     let timedOut = false;
+    const assertActive = () => {
+      if (!controller.signal.aborted) return;
+      if (timedOut) {
+        throw new PlaygroundApiError('LOCAL_API_TIMEOUT', 'Local API request timed out');
+      }
+      throw new PlaygroundApiError('LOCAL_API_ABORTED', 'Request was cancelled');
+    };
     const abortFromCaller = () => controller.abort();
     input.signal?.addEventListener('abort', abortFromCaller, { once: true });
     const timeoutHandle = timers.setTimeout(() => {
@@ -148,8 +155,15 @@ function createExecute(options: CreatePlaygroundApiOptions): Execute {
         ...input.init,
         signal: controller.signal,
       });
-      if (!response.ok) throw parseHttpError(await response.text());
-      return await input.parse(response);
+      assertActive();
+      if (!response.ok) {
+        const errorText = await response.text();
+        assertActive();
+        throw parseHttpError(errorText);
+      }
+      const output = await input.parse(response);
+      assertActive();
+      return output;
     } catch (error: unknown) {
       if (error instanceof PlaygroundApiError) throw error;
       if (timedOut) {
