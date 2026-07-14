@@ -2,38 +2,54 @@
   "name": "sully-api-demo",
   "version": "0.1.0",
   "description": "Demo code and apps for how to use the Sully.ai public API",
-  "main": "index.js",
   "type": "module",
+  "packageManager": "pnpm@10.33.2",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "pnpm run build:client && pnpm run build:server && node ./dist/server.js",
+    "build": "pnpm build:client && pnpm build:server",
+    "build:client": "esbuild browser/playground-app.ts --bundle --outfile=dist/client/playground-app.js --platform=browser --target=es2021 --format=esm",
+    "build:server": "tsc -p tsconfig.server.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.browser.json --noEmit",
+    "test:unit": "tsx --test __tests__/*.test.ts",
+    "test:integration": "tsx --test tests/*.test.ts",
+    "test": "pnpm test:unit && pnpm test:integration",
+    "test:e2e": "pnpm build && playwright test",
+    "start": "pnpm build && node dist/server/server.js",
     "start:note": "tsx sully-demo.ts note",
-    "start:stream": "tsx sully-demo.ts stream",
-    "build:server": "tsc -p tsconfig.browser.json",
-    "build:client": "esbuild sully-browser-demo.ts --bundle --outfile=dist/sully-browser-demo.js --platform=browser --target=es2020 --format=esm && esbuild demo-ui.ts --bundle --outfile=dist/demo-ui.js --platform=browser --target=es2020 --format=esm && esbuild demo-app.ts --bundle --outfile=dist/demo-app.js --platform=browser --target=es2020 --format=esm"
+    "start:stream": "tsx sully-demo.ts stream"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@speechmatics/browser-audio-input": "^2.0.3",
-    "@types/node": "^22.9.0",
-    "@types/ws": "^8.5.13",
     "commander": "^12.1.0",
     "dotenv": "^16.4.5",
-    "express": "^4.21.2",
-    "form-data": "^4.0.1",
+    "express": "^4.22.2",
+    "form-data": "^4.0.6",
+    "multer": "^2.2.0",
     "node-fetch": "^3.3.2",
     "node-microphone": "^0.1.6",
-    "typescript": "^5.6.3",
-    "ws": "^8.18.0"
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/node-fetch": "^2.6.12",
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
+    "@types/express": "^4.17.25",
+    "@types/multer": "^2.2.0",
+    "@types/node": "^22.9.0",
     "@types/node-microphone": "^0.1.4",
-    "esbuild": "^0.27.3",
-    "ts-node": "^10.9.2",
-    "tsx": "^4.19.2"
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.23.1",
+    "typescript": "^5.6.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "@types/multer>@types/express": "4.17.25"
+    }
   }
 }

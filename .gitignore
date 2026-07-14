@@ -8,5 +8,7 @@ node_modules/
 .DS_Store
 .data/
 dist/
+playwright-report/
+test-results/
 *.log
 docs/

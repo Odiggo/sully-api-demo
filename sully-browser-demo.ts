@@ -1,8 +1,5 @@
-/**
- * Browser-based implementation of Sully AI's WebSocket streaming demo
- */
-import { PCMRecorder } from '@speechmatics/browser-audio-input';
 import { expandDictationLayoutMarkers } from './dictation-layout.js';
+import { encodeStreamingAudio, streamingAudioLevel } from './streaming-audio.js';
 import {
   DEFAULT_STREAMING_LANGUAGE_TAG,
   MULTILINGUAL_LANGUAGE_TAG,
@@ -10,12 +7,27 @@ import {
 } from './languages.js';
 import {
   buildStreamingWebSocketUrl,
-  parseStreamingTokenResponse,
   type StreamingToken,
 } from './streaming-client.js';
+import {
+  createBrowserStreamingDependencies,
+  friendlyMicError,
+} from './streaming-browser-adapters.js';
+import { parseStreamingMessage, parseTranscriptWords } from './streaming-message.js';
+import type { StreamingGenerationResources } from './streaming-resources.js';
+import type {
+  SessionPhase,
+  SocketPort,
+  StreamEndReason,
+  StreamingConfig,
+  StreamingDependencies,
+  StreamingTransport,
+  TranscriptSegment,
+  TranscriptWord,
+} from './streaming-types.js';
 
-const toError = ({ value }: { value: unknown }): Error =>
-  value instanceof Error ? value : new Error(String(value));
+export * from './streaming-types.js';
+export { friendlyMicError } from './streaming-browser-adapters.js';
 
 export {
   DEFAULT_STREAMING_LANGUAGE_TAG,
@@ -23,117 +35,35 @@ export {
   SUPPORTED_LANGUAGES,
 };
 
-export type SessionPhase =
-  | 'idle'
-  | 'preparing'
-  | 'connecting'
-  | 'live'
-  | 'reconnecting'
-  | 'stopping'
-  | 'error';
+const SOCKET_OPEN = 1;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const HANDSHAKE_TIMEOUT_MS = 10_000;
 
-export type StreamEndReason =
-  | 'manual'
-  | 'timer'
-  | 'server'
-  | 'error'
-  | 'connection_lost';
-
-export interface TranscriptWord {
-  word: string;
-  start?: number;
-  end?: number;
-  confidence?: number;
-  punctuated_word?: string;
+function abortError(): DOMException {
+  return new DOMException('Streaming start aborted', 'AbortError');
 }
 
-export interface TranscriptSegment {
-  text: string;
-  isFinal: boolean;
+function isAbort(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
 }
 
-export interface TranscriptUpdate {
-  segments: TranscriptSegment[];
-  words?: TranscriptWord[];
-}
-
-export interface StreamErrorEvent {
-  message: string;
-  fatal: boolean;
-}
-
-export interface ReconnectAttemptEvent {
-  attempt: number;
-  maxAttempts: number;
-  delayMs: number;
-}
-
-export interface StreamCompleteEvent {
-  reason: StreamEndReason;
-}
-
-export interface StreamingConfig {
-  duration?: number;
-  language?: string;
-  dictation?: boolean;
-  onPhaseChange?: (phase: SessionPhase) => void;
-  onAutoStopTick?: (secondsRemaining: number) => void;
-  onTranscription?: (update: TranscriptUpdate) => void;
-  onStreamError?: (event: StreamErrorEvent) => void;
-  onReconnectAttempt?: (event: ReconnectAttemptEvent) => void;
-  onAudioLevel?: (level: number) => void;
-  onError?: (error: Error) => void;
-  onComplete?: (event: StreamCompleteEvent) => void;
-  /** @deprecated Use onPhaseChange */
-  onStatusChange?: (
-    status: 'starting' | 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting',
-  ) => void;
-}
-
-export function friendlyMicError(error: unknown): Error {
-  const name = error instanceof Error ? error.name : '';
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
-    return new Error(
-      'Microphone access was denied. Allow the mic in your browser settings and try again.',
-    );
-  }
-  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return new Error('No microphone was found. Connect a mic and try again.');
-  }
-  if (message.includes('16000')) {
-    return new Error(
-      'This browser could not open a 16 kHz audio stream. Try Chrome or close other apps using the mic.',
-    );
-  }
-  return error instanceof Error ? error : new Error(message);
-}
-
-export class SullyStreamingDemo {
-  private ws: WebSocket | null = null;
-  private pcmRecorder: PCMRecorder | null = null;
-  private audioContext: AudioContext | null = null;
-  private retryCount = 0;
-  private readonly maxRetries = 5;
-  private retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  private countdownIntervalId: ReturnType<typeof setInterval> | null = null;
-  private userStopped = false;
-  private isStarting = false;
-  private endReason: StreamEndReason = 'manual';
+export class SullyStreamingDemo implements StreamingTransport {
   private phase: SessionPhase = 'idle';
-  private streamingToken: { token: string; apiUrl: string; accountId: string } | null = null;
-  private config: StreamingConfig;
+  private cleanupFailed = false;
+  private resources?: StreamingGenerationResources;
+  private startPromise?: Promise<void>;
+  private readonly dependencies: StreamingDependencies;
+  private readonly config: StreamingConfig;
   private segments: TranscriptSegment[] = [];
   private currentSegmentIndex = 0;
-  private lastWords: TranscriptWord[] | undefined;
+  private lastWords?: TranscriptWord[];
 
-  constructor(config: StreamingConfig) {
-    this.config = {
-      language: DEFAULT_STREAMING_LANGUAGE_TAG,
-      dictation: false,
-      ...config,
-    };
+  constructor(
+    config: StreamingConfig,
+    dependencies: StreamingDependencies = createBrowserStreamingDependencies(),
+  ) {
+    this.config = { language: DEFAULT_STREAMING_LANGUAGE_TAG, dictation: false, ...config };
+    this.dependencies = dependencies;
   }
 
   getPhase(): SessionPhase {
@@ -148,6 +78,10 @@ export class SullyStreamingDemo {
     this.config.dictation = dictation;
   }
 
+  setTokenExpiresIn(seconds: number): void {
+    this.config.tokenExpiresIn = seconds;
+  }
+
   setDuration(durationMs: number): void {
     this.config.duration = durationMs > 0 ? durationMs : undefined;
   }
@@ -155,407 +89,374 @@ export class SullyStreamingDemo {
   private setPhase(phase: SessionPhase): void {
     this.phase = phase;
     this.config.onPhaseChange?.(phase);
-    const legacy = phaseToLegacyStatus(phase);
-    if (legacy) {
-      this.config.onStatusChange?.(legacy);
-    }
+  }
+
+  private isCurrent(resources: StreamingGenerationResources): boolean {
+    return this.resources === resources && !resources.controller.signal.aborted;
   }
 
   private tokenExpiresInSeconds(): number {
-    const durationMs = this.config.duration ?? 0;
-    if (durationMs > 0) {
-      return Math.min(604_800, Math.max(60, Math.ceil(durationMs / 1000) + 120));
+    if (this.config.tokenExpiresIn !== undefined) return this.config.tokenExpiresIn;
+    if (this.config.duration) {
+      return Math.min(604_800, Math.max(60, Math.ceil(this.config.duration / 1000) + 120));
     }
-    return 3600;
+    return 3_600;
   }
 
-  private async fetchStreamingToken(): Promise<StreamingToken> {
-    const tokenResponse = await fetch('/streaming-token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expiresIn: this.tokenExpiresInSeconds() }),
-    });
-
-    if (!tokenResponse.ok) {
-      throw new Error(
-        'Failed to get a streaming token. Check SULLY_API_KEY, SULLY_ACCOUNT_ID, and SULLY_API_URL in .env.',
-      );
+  start(): Promise<void> {
+    if (this.cleanupFailed) {
+      return Promise.reject(new Error('Streaming cleanup failed. Reload before starting again.'));
     }
-
-    return parseStreamingTokenResponse({
-      value: await tokenResponse.json(),
-    });
-  }
-
-  async start(): Promise<void> {
-    if (this.isStarting || this.pcmRecorder?.isRecording) {
-      console.warn('start() ignored — session already starting or live');
-      return;
-    }
-
-    this.isStarting = true;
-    this.userStopped = false;
-    this.retryCount = 0;
-    this.streamingToken = null;
-    this.endReason = 'manual';
+    if (this.startPromise && this.phase !== 'idle' && this.phase !== 'error') return this.startPromise;
+    if (this.phase === 'live' || this.phase === 'reconnecting') return Promise.resolve();
+    const resources: StreamingGenerationResources = {
+      controller: new AbortController(),
+      recorderStarted: false,
+      recorderStopped: false,
+      audioClosed: false,
+      socketClosed: false,
+      socketDisconnected: false,
+      retryCount: 0,
+      completionEmitted: false,
+    };
+    this.resources = resources;
+    this.segments = [];
+    this.currentSegmentIndex = 0;
     this.lastWords = undefined;
-
-    try {
-      this.segments = [];
-      this.currentSegmentIndex = 0;
-      this.emitTranscript();
-
-      this.setPhase('preparing');
-      const { token, apiUrl, accountId } = await this.fetchStreamingToken();
-      this.streamingToken = { token, apiUrl, accountId };
-
-      this.setPhase('connecting');
-      await this.initializeWebSocket(token, apiUrl, accountId);
-      await this.initializeAudioRecording();
-
-      this.setPhase('live');
-      this.startAutoStopTimer();
-    } catch (error) {
-      this.endReason = 'error';
-      this.handleError(friendlyMicError(error));
-    } finally {
-      this.isStarting = false;
-    }
-  }
-
-  stop(reason: StreamEndReason = 'manual'): void {
-    if (this.phase === 'idle' || this.phase === 'stopping') {
-      return;
-    }
-
-    this.userStopped = true;
-    this.endReason = reason;
-    this.setPhase('stopping');
-    this.clearTimers();
-
-    if (this.pcmRecorder?.isRecording) {
-      this.pcmRecorder.stopRecording();
-    }
-    if (this.audioContext) {
-      this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
-
-    this.pcmRecorder = null;
-    this.setPhase('idle');
-    this.config.onComplete?.({ reason: this.endReason });
-  }
-
-  private startAutoStopTimer(): void {
-    if (!this.config.duration) return;
-
-    let remainingTime = Math.ceil(this.config.duration / 1000);
-    this.config.onAutoStopTick?.(remainingTime);
-
-    this.countdownIntervalId = setInterval(() => {
-      remainingTime--;
-      if (remainingTime > 0) {
-        this.config.onAutoStopTick?.(remainingTime);
-      }
-      if (remainingTime <= 0) {
-        this.clearAutoStopTimer();
-        this.endReason = 'timer';
-        this.stop('timer');
-      }
-    }, 1000);
-  }
-
-  private clearAutoStopTimer(): void {
-    if (this.countdownIntervalId) {
-      clearInterval(this.countdownIntervalId);
-      this.countdownIntervalId = null;
-    }
-  }
-
-  private clearTimers(): void {
-    this.clearAutoStopTimer();
-    if (this.retryTimeoutId) {
-      clearTimeout(this.retryTimeoutId);
-      this.retryTimeoutId = null;
-    }
-  }
-
-  private clearInterimSegments(): void {
-    this.segments = this.segments.filter((segment) => segment.isFinal);
-    this.currentSegmentIndex = this.segments.length;
     this.emitTranscript();
+    const starting = this.startGeneration(resources).finally(() => {
+      if (this.resources === resources) this.startPromise = undefined;
+    });
+    this.startPromise = starting;
+    return starting;
   }
 
-  private async reconnect(): Promise<void> {
-    if (this.userStopped) return;
-
-    if (this.retryCount >= this.maxRetries) {
-      this.endReason = 'connection_lost';
-      this.handleError(
-        new Error(`Lost connection after ${this.maxRetries} reconnect attempts`),
+  private async startGeneration(resources: StreamingGenerationResources): Promise<void> {
+    try {
+      this.setPhase('preparing');
+      const token = await this.config.createStreamingToken(
+        this.tokenExpiresInSeconds(),
+        resources.controller.signal,
       );
+      if (!this.isCurrent(resources)) return;
+      this.setPhase('connecting');
+      await this.openSocket(resources, token);
+      if (!this.isCurrent(resources)) return;
+      resources.audioContext = this.dependencies.createAudioContext();
+      if (resources.audioContext.sampleRate !== 16_000) {
+        throw new Error(`AudioContext sample rate is ${resources.audioContext.sampleRate}Hz, expected 16000Hz.`);
+      }
+      resources.recorder = this.dependencies.createRecorder();
+      resources.recorder.setAudioHandler((samples) => this.handleAudio(resources, samples));
+      await resources.recorder.start(resources.audioContext);
+      resources.recorderStarted = true;
+      if (resources.socketDisconnected) {
+        throw new Error('WebSocket closed before streaming could start');
+      }
+      if (!this.isCurrent(resources)) {
+        await this.cleanupResources(resources);
+        return;
+      }
+      this.setPhase('live');
+      this.startAutoStopTimer(resources);
+    } catch (error: unknown) {
+      if (isAbort(error) || resources.controller.signal.aborted) {
+        await resources.stopPromise?.catch(() => undefined);
+        const failures = await this.cleanupResources(resources);
+        if (failures.length > 0) {
+          this.markCleanupFailure(resources, failures);
+        }
+        return;
+      }
+      const safe = friendlyMicError(error);
+      this.config.onError?.(safe);
+      await this.stopResources(resources, 'error');
+    }
+  }
+
+  stop(reason: StreamEndReason = 'manual'): Promise<void> {
+    const resources = this.resources;
+    if (!resources) return Promise.resolve();
+    return this.stopResources(resources, reason);
+  }
+
+  private stopResources(
+    resources: StreamingGenerationResources,
+    reason: StreamEndReason,
+  ): Promise<void> {
+    if (resources.stopPromise) return resources.stopPromise;
+    resources.controller.abort();
+    if (this.resources === resources && this.phase !== 'idle' && this.phase !== 'error') {
+      this.setPhase('stopping');
+    }
+    resources.stopPromise = this.cleanupResources(resources).then((failures) => {
+      if (failures.length > 0) {
+        throw this.markCleanupFailure(resources, failures);
+      }
+      if (!resources.completionEmitted) {
+        resources.completionEmitted = true;
+        this.config.onComplete?.({ reason });
+      }
+      if (this.resources === resources) {
+        this.startPromise = undefined;
+        this.setPhase(reason === 'error' ? 'error' : 'idle');
+      }
+    });
+    return resources.stopPromise;
+  }
+
+  private markCleanupFailure(
+    resources: StreamingGenerationResources,
+    failures: unknown[],
+  ): AggregateError {
+    this.cleanupFailed = true;
+    const error = new AggregateError(failures, 'Streaming cleanup failed');
+    if (this.resources === resources) {
+      this.startPromise = undefined;
+      this.setPhase('error');
+    }
+    this.config.onError?.(error);
+    return error;
+  }
+
+  private async cleanupResources(resources: StreamingGenerationResources): Promise<unknown[]> {
+    const releases = this.releaseTimers(resources);
+    const recorder = resources.recorder;
+    if (recorder) {
+      releases.push(Promise.resolve().then(() => recorder.setAudioHandler(undefined)));
+      releases.push(
+        Promise.resolve().then(() => {
+          if (!resources.recorderStopped && (recorder.isRecording || resources.recorderStarted)) {
+            resources.recorderStopped = true;
+            recorder.stop();
+          }
+        }),
+      );
+    }
+    const audioContext = resources.audioContext;
+    if (audioContext && !resources.audioClosed) {
+      resources.audioClosed = true;
+      releases.push(Promise.resolve().then(() => audioContext.close()));
+    }
+    releases.push(...this.releaseSocket(resources));
+    const results = await Promise.allSettled(releases);
+    return results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => result.reason);
+  }
+
+  private releaseSocket(resources: StreamingGenerationResources): Promise<void>[] {
+    const socket = resources.socket;
+    if (!socket || resources.socketClosed) return [];
+    resources.socketClosed = true;
+    resources.socket = undefined;
+    return [
+      Promise.resolve().then(() => socket.setMessageHandler(undefined)),
+      Promise.resolve().then(() => socket.setCloseHandler(undefined)),
+      Promise.resolve().then(() => socket.setErrorHandler(undefined)),
+      Promise.resolve().then(() => socket.close()),
+    ];
+  }
+
+  private releaseTimers(resources: StreamingGenerationResources): Promise<void>[] {
+    const releases: Promise<void>[] = [];
+    if (resources.handshakeTimeout !== undefined) {
+      const handle = resources.handshakeTimeout;
+      resources.handshakeTimeout = undefined;
+      releases.push(Promise.resolve().then(() => this.dependencies.timers.clearTimeout(handle)));
+    }
+    if (resources.retryTimeout !== undefined) {
+      const handle = resources.retryTimeout;
+      resources.retryTimeout = undefined;
+      releases.push(Promise.resolve().then(() => this.dependencies.timers.clearTimeout(handle)));
+    }
+    if (resources.countdownInterval !== undefined) {
+      const handle = resources.countdownInterval;
+      resources.countdownInterval = undefined;
+      releases.push(Promise.resolve().then(() => this.dependencies.timers.clearInterval(handle)));
+    }
+    return releases;
+  }
+
+  private async openSocket(
+    resources: StreamingGenerationResources,
+    token: StreamingToken,
+  ): Promise<void> {
+    const url = buildStreamingWebSocketUrl({
+      apiUrl: token.apiUrl,
+      sampleRate: 16_000,
+      encoding: 'linear16',
+      dictation: this.config.dictation ?? false,
+      language: this.config.language,
+      accountId: token.accountId,
+      apiToken: token.token,
+    });
+    const socket = this.dependencies.createSocket(url);
+    resources.socket = socket;
+    resources.socketClosed = false;
+    resources.socketDisconnected = false;
+    await this.waitForHandshake(resources, socket);
+    if (resources.socketDisconnected) {
+      throw new Error('WebSocket closed before streaming could start');
+    }
+  }
+
+  private waitForHandshake(
+    resources: StreamingGenerationResources,
+    socket: SocketPort,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (resources.handshakeTimeout !== undefined) {
+          this.dependencies.timers.clearTimeout(resources.handshakeTimeout);
+          resources.handshakeTimeout = undefined;
+        }
+        resources.controller.signal.removeEventListener('abort', handleAbort);
+        if (error) reject(error);
+        else resolve();
+      };
+      const handleAbort = () => finish(abortError());
+      resources.controller.signal.addEventListener('abort', handleAbort, { once: true });
+      resources.handshakeTimeout = this.dependencies.timers.setTimeout(
+        () => finish(new Error('WebSocket connection timed out after 10 seconds')),
+        HANDSHAKE_TIMEOUT_MS,
+      );
+      socket.setMessageHandler((message) => {
+        const value = parseStreamingMessage(message);
+        if (!settled && value?.type === 'status' && value.status === 'connected') {
+          finish();
+          return;
+        }
+        if (settled) this.handleMessage(resources, message);
+      });
+      socket.setErrorHandler(() => {
+        if (!settled) finish(new Error('WebSocket connection failed'));
+        else this.config.onStreamError?.({ message: 'Streaming socket error', fatal: false });
+      });
+      socket.setCloseHandler(() => {
+        resources.socketDisconnected = true;
+        if (!settled) finish(new Error('WebSocket closed before connecting'));
+        else if (this.phase === 'live') this.scheduleReconnect(resources);
+      });
+    });
+  }
+
+  private handleMessage(resources: StreamingGenerationResources, message: string): void {
+    if (!this.isCurrent(resources)) return;
+    const data = parseStreamingMessage(message);
+    if (!data) {
+      this.config.onStreamError?.({ message: 'Invalid streaming response', fatal: false });
       return;
     }
-
-    const delay = Math.min(1000 * 2 ** this.retryCount, 30_000);
-    this.retryCount++;
-    this.setPhase('reconnecting');
-    this.clearInterimSegments();
-    this.config.onReconnectAttempt?.({
-      attempt: this.retryCount,
-      maxAttempts: this.maxRetries,
-      delayMs: delay,
-    });
-
-    this.retryTimeoutId = setTimeout(async () => {
-      if (this.userStopped) return;
-      try {
-        const { token, apiUrl, accountId } = await this.fetchStreamingToken();
-        this.streamingToken = { token, apiUrl, accountId };
-        await this.initializeWebSocket(token, apiUrl, accountId);
-        this.setPhase('live');
-      } catch (err) {
-        console.error('Reconnect attempt failed:', err);
-        await this.reconnect();
+    if (data.type === 'error') {
+      const raw = typeof data.error === 'string' ? data.error : data.message;
+      if (typeof raw === 'string' && raw.trim()) {
+        this.config.onStreamError?.({ message: raw.trim(), fatal: false });
       }
-    }, delay);
+      return;
+    }
+    if (data.type === 'status' && data.status === 'disconnected') {
+      this.requestHandledStop('server');
+      return;
+    }
+    if (typeof data.text === 'string') {
+      const isFinal =
+        typeof data.is_final === 'boolean'
+          ? data.is_final
+          : typeof data.isFinal === 'boolean'
+            ? data.isFinal
+            : false;
+      this.updateSegments(data.text, isFinal, parseTranscriptWords(data.words));
+    }
+  }
+
+  private updateSegments(text: string, isFinal: boolean, words?: TranscriptWord[]): void {
+    if (words?.length) this.lastWords = words;
+    const segment = { text: expandDictationLayoutMarkers(text), isFinal };
+    this.segments[this.currentSegmentIndex] = segment;
+    if (isFinal) this.currentSegmentIndex += 1;
+    this.emitTranscript();
   }
 
   private emitTranscript(): void {
     this.config.onTranscription?.({
       segments: this.segments.map((segment) => ({ ...segment })),
-      words: this.lastWords,
+      words: this.lastWords?.map((word) => ({ ...word })),
     });
   }
 
-  private updateSegments(text: string, isFinal: boolean, words?: TranscriptWord[]): void {
-    if (words?.length) {
-      this.lastWords = words;
+  private handleAudio(resources: StreamingGenerationResources, samples: Float32Array): void {
+    if (
+      samples.length === 0 ||
+      !this.isCurrent(resources) ||
+      resources.socket?.readyState !== SOCKET_OPEN
+    ) return;
+    if (this.config.onAudioLevel) this.config.onAudioLevel(streamingAudioLevel(samples));
+    resources.socket.send(JSON.stringify({ audio: encodeStreamingAudio(samples) }));
+  }
+
+  private scheduleReconnect(resources: StreamingGenerationResources): void {
+    if (
+      !this.isCurrent(resources) ||
+      (this.phase !== 'live' && this.phase !== 'reconnecting')
+    ) return;
+    if (resources.retryCount >= MAX_RECONNECT_ATTEMPTS) {
+      this.config.onError?.(new Error('Connection lost after reconnect attempts'));
+      this.requestHandledStop('connection_lost');
+      return;
     }
-
-    const normalizedText = expandDictationLayoutMarkers(text);
-
-    if (isFinal) {
-      this.segments[this.currentSegmentIndex] = {
-        text: normalizedText,
-        isFinal: true,
-      };
-      this.currentSegmentIndex++;
-    } else {
-      this.segments[this.currentSegmentIndex] = {
-        text: normalizedText,
-        isFinal: false,
-      };
-    }
-
+    const delayMs = Math.min(1_000 * 2 ** resources.retryCount, 30_000);
+    resources.retryCount += 1;
+    this.setPhase('reconnecting');
+    this.segments = this.segments.filter((segment) => segment.isFinal);
+    this.currentSegmentIndex = this.segments.length;
     this.emitTranscript();
-  }
-
-  private isTranscriptFinal(data: { is_final?: boolean; isFinal?: boolean }): boolean {
-    return data.is_final ?? data.isFinal ?? false;
-  }
-
-  private handleStreamErrorMessage(message: string): void {
-    const fatal = false;
-    this.config.onStreamError?.({ message, fatal });
-    if (fatal) {
-      this.endReason = 'error';
-      this.handleError(new Error(message));
-    }
-  }
-
-  private async initializeWebSocket(
-    token: string,
-    apiUrl: string,
-    accountId: string,
-  ): Promise<void> {
-    const fullUrl = buildStreamingWebSocketUrl({
-      apiUrl,
-      sampleRate: 16000,
-      encoding: 'linear32',
-      dictation: this.config.dictation ?? false,
-      language: this.config.language,
-      accountId,
-      apiToken: token,
+    this.config.onReconnectAttempt?.({
+      attempt: resources.retryCount,
+      maxAttempts: MAX_RECONNECT_ATTEMPTS,
+      delayMs,
     });
-    console.log(
-      'Connecting to WebSocket:',
-      buildStreamingWebSocketUrl({
-        apiUrl,
-        sampleRate: 16000,
-        encoding: 'linear32',
-        dictation: this.config.dictation ?? false,
-        language: this.config.language,
-      }),
-    );
-    this.ws = new WebSocket(fullUrl);
+    resources.retryTimeout = this.dependencies.timers.setTimeout(() => {
+      resources.retryTimeout = undefined;
+      void this.reconnect(resources);
+    }, delayMs);
+  }
 
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error('WebSocket connection timed out after 10s')),
-        10_000,
+  private async reconnect(resources: StreamingGenerationResources): Promise<void> {
+    if (!this.isCurrent(resources)) return;
+    await Promise.allSettled(this.releaseSocket(resources));
+    if (!this.isCurrent(resources)) return;
+    try {
+      const token = await this.config.createStreamingToken(
+        this.tokenExpiresInSeconds(),
+        resources.controller.signal,
       );
-      if (!this.ws) return reject(new Error('WebSocket not initialized'));
+      if (!this.isCurrent(resources)) return;
+      await this.openSocket(resources, token);
+      if (this.isCurrent(resources)) this.setPhase('live');
+    } catch (error: unknown) {
+      await Promise.allSettled(this.releaseSocket(resources));
+      if (!isAbort(error) && this.isCurrent(resources)) this.scheduleReconnect(resources);
+    }
+  }
 
-      this.ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'status' && data.status === 'connected') {
-            clearTimeout(timeout);
-            resolve();
-          }
-        } catch {
-          clearTimeout(timeout);
-          reject(new Error('Failed to parse WebSocket handshake message'));
-        }
-      };
+  private startAutoStopTimer(resources: StreamingGenerationResources): void {
+    if (!this.config.duration) return;
+    let remaining = Math.ceil(this.config.duration / 1_000);
+    this.config.onAutoStopTick?.(remaining);
+    resources.countdownInterval = this.dependencies.timers.setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) this.config.onAutoStopTick?.(remaining);
+      else this.requestHandledStop('timer');
+    }, 1_000);
+  }
 
-      this.ws.onerror = () => {
-        clearTimeout(timeout);
-        reject(new Error('WebSocket connection failed'));
-      };
+  private requestHandledStop(reason: StreamEndReason): void {
+    void this.stop(reason).catch(() => {
+      this.config.onError?.(new Error('Streaming stop failed'));
     });
-
-    this.ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        if (data.type === 'error') {
-          const raw =
-            typeof data.error === 'string'
-              ? data.error
-              : typeof data.message === 'string'
-                ? data.message
-                : '';
-          const trimmed = raw.trim();
-          if (trimmed) {
-            this.handleStreamErrorMessage(trimmed);
-          }
-          return;
-        }
-
-        if (data.type === 'status' && data.status === 'disconnected') {
-          this.endReason = 'server';
-          this.stop('server');
-          return;
-        }
-
-        if (data.text) {
-          const isFinal = this.isTranscriptFinal(data);
-          const words = Array.isArray(data.words) ? (data.words as TranscriptWord[]) : undefined;
-          this.updateSegments(data.text, isFinal, words);
-        }
-      } catch (error) {
-        this.handleError(toError({ value: error }));
-      }
-    };
-
-    this.ws.onclose = () => {
-      if (!this.userStopped && this.phase === 'live') {
-        this.reconnect();
-      }
-    };
-  }
-
-  private async initializeAudioRecording(): Promise<void> {
-    const workletUrl = '/audio-worklet/pcm-audio-worklet.min.js';
-    this.audioContext = new AudioContext({ sampleRate: 16000 });
-
-    if (this.audioContext.sampleRate !== 16000) {
-      throw new Error(
-        `AudioContext sample rate is ${this.audioContext.sampleRate}Hz, expected 16000Hz.`,
-      );
-    }
-
-    this.pcmRecorder = new PCMRecorder(workletUrl);
-
-    this.pcmRecorder.addEventListener('audio', (event) => {
-      if (this.ws?.readyState !== WebSocket.OPEN) return;
-      const samples = event.data;
-      this.reportAudioLevel(samples);
-      const base64 = this.float32ArrayToBase64(samples);
-      this.ws.send(JSON.stringify({ audio: base64 }));
-    });
-
-    await this.pcmRecorder.startRecording({ audioContext: this.audioContext });
-  }
-
-  private reportAudioLevel(samples: Float32Array): void {
-    if (!this.config.onAudioLevel) return;
-    let sum = 0;
-    for (let i = 0; i < samples.length; i++) {
-      sum += samples[i] * samples[i];
-    }
-    const rms = Math.sqrt(sum / samples.length);
-    this.config.onAudioLevel(Math.min(1, rms * 8));
-  }
-
-  private float32ArrayToBase64(samples: Float32Array): string {
-    const bytes = new Uint8Array(samples.buffer);
-    let binary = '';
-    const chunkSize = 4096;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
-  }
-
-  private handleError(error: Error): void {
-    console.error('Sully Streaming Demo error:', error);
-    this.config.onError?.(error);
-    if (this.phase !== 'idle') {
-      this.userStopped = true;
-      this.clearTimers();
-      if (this.pcmRecorder?.isRecording) {
-        this.pcmRecorder.stopRecording();
-      }
-      if (this.audioContext) {
-        this.audioContext.close().catch(() => {});
-        this.audioContext = null;
-      }
-      if (this.ws) {
-        this.ws.close();
-        this.ws = null;
-      }
-      this.pcmRecorder = null;
-      if (this.endReason === 'manual') {
-        this.endReason = 'error';
-      }
-      this.setPhase('error');
-      this.config.onComplete?.({ reason: this.endReason });
-    }
-  }
-}
-
-function phaseToLegacyStatus(
-  phase: SessionPhase,
-):
-  | 'starting'
-  | 'connecting'
-  | 'connected'
-  | 'disconnected'
-  | 'error'
-  | 'reconnecting'
-  | undefined {
-  switch (phase) {
-    case 'preparing':
-      return 'starting';
-    case 'connecting':
-      return 'connecting';
-    case 'live':
-      return 'connected';
-    case 'reconnecting':
-      return 'reconnecting';
-    case 'stopping':
-    case 'idle':
-      return 'disconnected';
-    case 'error':
-      return 'error';
-    default:
-      return undefined;
   }
 }

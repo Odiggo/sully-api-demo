@@ -1,0 +1,135 @@
+import { expect, test } from '@playwright/test';
+
+import { installApiMocks } from './helpers/api-mocks.js';
+
+test('runs transcription, note handoff, note generation, and coding', async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto('/');
+
+  await page.getByRole('tab', { name: /Transcription/ }).click();
+  await page.getByLabel('Choose an audio file').setInputFiles({
+    name: 'sample.wav',
+    mimeType: 'audio/wav',
+    buffer: Buffer.from('RIFF'),
+  });
+  await page.getByRole('button', { name: 'Transcribe audio' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Transcription' })).toContainText(
+    'Patient reports mild asthma.',
+  );
+  await page.getByRole('button', { name: 'Use for note' }).click();
+  await expect(page.getByRole('tab', { name: /Note generation/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(page.getByRole('textbox', { name: 'Transcript', exact: true })).toHaveValue(
+    'Patient reports mild asthma.',
+  );
+  await expect(page.getByRole('textbox', { name: 'Transcript', exact: true })).toBeFocused();
+
+  await page.getByLabel('Encounter date').fill('2026-07-13');
+  await page.getByRole('button', { name: 'Generate note' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Note generation' })).toContainText('Mild asthma.');
+  await page.getByRole('button', { name: 'Send to coding' }).click();
+  await expect(page.getByLabel('Clinical text')).toHaveValue('## Assessment\nMild asthma.');
+  await page.getByRole('button', { name: 'Run medical coding' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Medical coding' })).toContainText('J45.909');
+
+  expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual([
+    'POST /api/transcriptions',
+    'GET /api/transcriptions/tr_demo',
+    'POST /api/notes',
+    'GET /api/notes/note_demo',
+    'POST /api/codings',
+    'GET /api/codings/coding_demo',
+  ]);
+  expect(requests[2]?.body).toEqual({
+    transcript: 'Patient reports mild asthma.',
+    date: '2026-07-13',
+    language: 'en',
+    noteType: {
+      type: 'note_style',
+      template: 'SOAP note with Subjective, Objective, Assessment, and Plan sections.',
+      includeJson: false,
+    },
+  });
+  expect(requests[4]?.body).toEqual({ text: '## Assessment\nMild asthma.' });
+});
+
+test('leaving transcription aborts a pending sample without a hidden announcement', async ({ page }) => {
+  let releaseSample: (() => void) | undefined;
+  await page.route('**/samples/demo-audio.wav', async (route) => {
+    await new Promise<void>((resolve) => {
+      releaseSample = resolve;
+    });
+    await route.fulfill({
+      body: 'RIFF',
+      contentType: 'audio/wav',
+    }).catch(() => undefined);
+  });
+  await page.goto('/#transcription');
+  await page.getByRole('button', { name: 'Use bundled sample' }).click();
+  await page.getByRole('tab', { name: /Note generation/ }).click();
+  releaseSample?.();
+  await page.waitForTimeout(50);
+
+  await expect(page.locator('[data-announcer]')).not.toContainText('Bundled sample audio selected');
+});
+
+test('loads bundled audio through the same transcription path', async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto('/#transcription');
+  await page.getByRole('button', { name: 'Use bundled sample' }).click();
+  await expect(page.getByRole('button', { name: 'Bundled sample selected' })).toBeVisible();
+  await page.getByRole('button', { name: 'Transcribe audio' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Transcription' })).toContainText(
+    'Patient reports mild asthma.',
+  );
+  expect(requests.map(({ path }) => path)).toEqual([
+    '/api/transcriptions',
+    '/api/transcriptions/tr_demo',
+  ]);
+});
+
+test('ships a valid JSON Schema example for text-to-JSON', async ({ page }) => {
+  await installApiMocks(page);
+  await page.goto('/#text-to-json');
+  const value = await page.getByLabel('Output schema (JSON object)').inputValue();
+  expect(JSON.parse(value)).toEqual({
+    type: 'object',
+    properties: {
+      age: { type: 'number' },
+      allergies: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['age', 'allergies'],
+  });
+});
+
+test('validates schema locally and renders text-to-JSON output as inert text', async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto('/#text-to-json');
+  await page.getByLabel('Source text').fill('Patient is 42 years old.');
+  await page.getByLabel('Output schema (JSON object)').fill('{');
+  await page.getByRole('button', { name: 'Convert to JSON' }).click();
+  await expect(page.getByRole('alert')).toContainText('valid JSON object');
+  expect(requests).toEqual([]);
+
+  await page.getByLabel('Output schema (JSON object)').fill(`{
+    "type": "object",
+    "properties": { "age": { "type": "number" } },
+    "required": ["age"]
+  }`);
+  await page.getByRole('button', { name: 'Convert to JSON' }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Text to JSON' });
+  await expect(panel).toContainText('"age": 42');
+  await expect(panel).toContainText('<img src=x onerror=window.__unsafe=true>');
+  await expect(panel.locator('img')).toHaveCount(0);
+  expect(requests.map(({ path }) => path)).toEqual(['/api/text-to-json']);
+  expect(requests[0]?.body).toEqual({
+    text: 'Patient is 42 years old.',
+    schema: {
+      type: 'object',
+      properties: { age: { type: 'number' } },
+      required: ['age'],
+    },
+  });
+});

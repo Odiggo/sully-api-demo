@@ -1,8 +1,9 @@
-export interface StreamingToken {
-  token: string;
-  apiUrl: string;
-  accountId: string;
-}
+import {
+  streamingTokenBrokerResponseSchema,
+  type StreamingTokenBrokerResponse,
+} from './contracts/index.js';
+
+export type StreamingToken = StreamingTokenBrokerResponse;
 
 interface BuildStreamingWebSocketUrlParams {
   apiUrl: string;
@@ -25,26 +26,6 @@ const normalizeOptionalString = ({
 
   const trimmedValue = value.trim();
   return trimmedValue.length > 0 ? trimmedValue : undefined;
-};
-
-const isStreamingTokenRecord = (
-  value: unknown,
-): value is Record<keyof StreamingToken, string> => {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-
-  const token = normalizeOptionalString({
-    value: Reflect.get(value, 'token'),
-  });
-  const apiUrl = normalizeOptionalString({
-    value: Reflect.get(value, 'apiUrl'),
-  });
-  const accountId = normalizeOptionalString({
-    value: Reflect.get(value, 'accountId'),
-  });
-
-  return Boolean(token && apiUrl && accountId);
 };
 
 export const buildStreamingWebSocketUrl = ({
@@ -94,13 +75,9 @@ export const parseStreamingTokenResponse = ({
 }: {
   value: unknown;
 }): StreamingToken => {
-  if (!isStreamingTokenRecord(value)) {
+  const parsed = streamingTokenBrokerResponseSchema.safeParse(value);
+  if (!parsed.success) {
     throw new Error('Invalid streaming token response');
   }
-
-  return {
-    token: value.token,
-    apiUrl: value.apiUrl,
-    accountId: value.accountId,
-  };
+  return parsed.data;
 };

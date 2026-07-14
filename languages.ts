@@ -1,8 +1,5 @@
 /**
- * Browser demo language picker — grouped by language family with main locale tags.
- *
- * Tags match the Sully streaming transcription API. Regional variants are omitted when a
- * base tag (e.g. `ar`) is enough.
+ * Browser demo language picker — grouped by language family with documented locale tags.
  *
  * @see https://docs.sully.ai/api-reference/audio-transcriptions/languages
  */
@@ -17,7 +14,28 @@ export const MULTILINGUAL_LANGUAGE_TAG = 'multi';
 export const DEFAULT_STREAMING_LANGUAGE_TAG = 'en-US';
 
 export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
-  { name: 'Arabic', tags: ['ar', 'ar-SA', 'ar-EG'] },
+  {
+    name: 'Arabic',
+    tags: [
+      'ar',
+      'ar-AE',
+      'ar-SA',
+      'ar-QA',
+      'ar-KW',
+      'ar-SY',
+      'ar-LB',
+      'ar-PS',
+      'ar-JO',
+      'ar-EG',
+      'ar-SD',
+      'ar-TD',
+      'ar-MA',
+      'ar-DZ',
+      'ar-TN',
+      'ar-IQ',
+      'ar-IR',
+    ],
+  },
   { name: 'Belarusian', tags: ['be'] },
   { name: 'Bengali', tags: ['bn'] },
   { name: 'Bosnian', tags: ['bs'] },
@@ -30,7 +48,10 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguage[] = [
   { name: 'Czech', tags: ['cs'] },
   { name: 'Danish', tags: ['da', 'da-DK'] },
   { name: 'Dutch', tags: ['nl'] },
-  { name: 'English', tags: ['en', 'en-US', 'en-CA', 'en-IE', 'en-AU', 'en-GB', 'en-IN', 'en-NZ'] },
+  {
+    name: 'English',
+    tags: ['en', 'en-US', 'en-CA', 'en-IE', 'en-AU', 'en-GB', 'en-NZ', 'en-IN'],
+  },
   { name: 'Estonian', tags: ['et'] },
   { name: 'Finnish', tags: ['fi'] },
   { name: 'Flemish', tags: ['nl-BE'] },
