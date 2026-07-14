@@ -1,952 +1,185 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sully — WebSocket Streaming Demo</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
-
-    <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        :root {
-            --bg:         #080a14;
-            --s1:         #0d1023;
-            --s2:         #111428;
-            --b1:         #1c2040;
-            --b2:         #262c54;
-
-            --teal:       #00cba8;
-            --teal-glow:  rgba(0, 203, 168, 0.14);
-            --teal-b:     rgba(0, 203, 168, 0.3);
-            --red:        #ff3d6e;
-            --red-glow:   rgba(255, 61, 110, 0.18);
-            --red-b:      rgba(255, 61, 110, 0.35);
-            --amber:      #ffb930;
-            --amber-glow: rgba(255, 185, 48, 0.12);
-            --amber-b:    rgba(255, 185, 48, 0.3);
-            --blue:       #4d9fff;
-            --blue-glow:  rgba(77, 159, 255, 0.1);
-
-            --t1: #e4eaff;
-            --t2: #9aa3cc;
-            --t3: #5c6499;
-
-            --ui:   'Syne', sans-serif;
-            --mono: 'JetBrains Mono', monospace;
-            --r:    12px;
-        }
-
-        html, body {
-            height: 100%;
-            background: var(--bg);
-            color: var(--t1);
-            font-family: var(--ui);
-            -webkit-font-smoothing: antialiased;
-        }
-
-        body {
-            background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
-            background-size: 28px 28px;
-        }
-
-        body::before {
-            content: '';
-            position: fixed;
-            top: -200px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 800px;
-            height: 500px;
-            background: radial-gradient(ellipse, rgba(0, 203, 168, 0.05) 0%, transparent 68%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        /* ── App Shell ──────────────────────────────────────── */
-        .app {
-            position: relative;
-            z-index: 1;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            padding: 0 28px 48px;
-            max-width: 1220px;
-            margin: 0 auto;
-        }
-
-        /* ── Header ─────────────────────────────────────────── */
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 22px 0 18px;
-            border-bottom: 1px solid var(--b1);
-            margin-bottom: 28px;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .logo-img {
-            width: 32px;
-            height: 32px;
-            object-fit: contain;
-            border-radius: 6px;
-        }
-
-        .logo-word {
-            font-size: 21px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            color: var(--t1);
-        }
-
-        .logo-accent { color: var(--teal); }
-
-        .logo-sep {
-            width: 1px;
-            height: 18px;
-            background: var(--b2);
-        }
-
-        .logo-sub {
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            color: var(--t3);
-        }
-
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .chip {
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.07em;
-            color: var(--t3);
-            padding: 5px 11px;
-            border: 1px solid var(--b1);
-            border-radius: 100px;
-            background: var(--s1);
-            transition: all 0.3s ease;
-            white-space: nowrap;
-        }
-
-        .chip.live { color: var(--t2); border-color: var(--b2); }
-
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 7px;
-            padding: 6px 14px;
-            border-radius: 100px;
-            border: 1px solid var(--b1);
-            background: var(--s1);
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: var(--t2);
-            transition: all 0.25s ease;
-            white-space: nowrap;
-        }
-
-        .s-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--t3);
-            transition: all 0.3s ease;
-            flex-shrink: 0;
-        }
-
-        .status-pill.connected    { border-color: var(--teal-b); color: var(--teal); background: var(--teal-glow); }
-        .status-pill.connected    .s-dot { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
-        .status-pill.connecting,
-        .status-pill.starting,
-        .status-pill.reconnecting { border-color: var(--amber-b); color: var(--amber); background: var(--amber-glow); }
-        .status-pill.connecting   .s-dot,
-        .status-pill.starting     .s-dot,
-        .status-pill.reconnecting .s-dot { background: var(--amber); animation: blink 1s step-end infinite; }
-        .status-pill.error        { border-color: var(--red-b); color: var(--red); background: var(--red-glow); }
-        .status-pill.error        .s-dot { background: var(--red); }
-
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
-
-        /* ── Main Grid ──────────────────────────────────────── */
-        .main-grid {
-            display: grid;
-            grid-template-columns: 1fr 380px;
-            gap: 20px;
-            flex: 1;
-            min-height: 0;
-        }
-
-        .left-col  { display: flex; flex-direction: column; gap: 20px; }
-        .right-col { display: flex; flex-direction: column; gap: 16px; }
-
-        /* ── Panel base ─────────────────────────────────────── */
-        .panel {
-            background: var(--s1);
-            border: 1px solid var(--b1);
-            border-radius: var(--r);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .panel-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 20px;
-            border-bottom: 1px solid var(--b1);
-            background: var(--s2);
-            flex-shrink: 0;
-        }
-
-        .panel-tag {
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: var(--t3);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .panel-dot {
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background: var(--t3);
-            transition: all 0.3s;
-        }
-
-        .panel-dot.on { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
-
-        .panel-info {
-            font-family: var(--mono);
-            font-size: 10px;
-            color: var(--t3);
-        }
-
-        /* ── Record Section ─────────────────────────────────── */
-        .record-section {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 22px;
-            padding: 44px 24px 36px;
-        }
-
-        .btn-wrap {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .ring {
-            position: absolute;
-            width: 112px;
-            height: 112px;
-            border-radius: 50%;
-            border: 1px solid var(--red);
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .ring.pulse { animation: ring-out 2s ease-out infinite; }
-        .ring:nth-child(2).pulse { animation-delay: 0.7s; }
-
-        @keyframes ring-out {
-            0%   { transform: scale(0.88); opacity: 0.45; }
-            100% { transform: scale(1.9);  opacity: 0; }
-        }
-
-        .rec-btn {
-            position: relative;
-            width: 88px;
-            height: 88px;
-            border-radius: 50%;
-            border: 1.5px solid var(--b2);
-            background: var(--s2);
-            color: var(--t1);
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            transition:
-                transform    0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-                border-color 0.2s ease,
-                background   0.2s ease,
-                box-shadow   0.2s ease;
-        }
-
-        .rec-btn::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: 50%;
-            background: radial-gradient(circle, var(--teal-glow), transparent 70%);
-            opacity: 0;
-            transition: opacity 0.2s ease;
-        }
-
-        .rec-btn:hover                { transform: scale(1.07); border-color: var(--teal); box-shadow: 0 0 28px var(--teal-glow); }
-        .rec-btn:hover::before        { opacity: 1; }
-        .rec-btn:active               { transform: scale(0.95); }
-        .rec-btn.recording            { border-color: var(--red-b); background: var(--red-glow); box-shadow: 0 0 32px var(--red-glow); }
-        .rec-btn.recording::before    { background: radial-gradient(circle, var(--red-glow), transparent 70%); opacity: 1; }
-        .rec-btn.recording:hover      { border-color: var(--red); }
-
-        .btn-ico { color: var(--t1); transition: color 0.2s; }
-        .rec-btn.recording .btn-ico { color: var(--red); }
-
-        .btn-lbl {
-            font-family: var(--mono);
-            font-size: 8px;
-            letter-spacing: 0.22em;
-            text-transform: uppercase;
-            color: var(--t2);
-            transition: color 0.2s;
-        }
-
-        .rec-btn.recording .btn-lbl { color: var(--red); }
-
-        /* Waveform */
-        .waveform {
-            display: flex;
-            align-items: center;
-            gap: 3px;
-            height: 22px;
-            opacity: 0;
-            transition: opacity 0.35s ease;
-        }
-
-        .waveform.on { opacity: 1; }
-
-        .w-bar {
-            width: 3px;
-            background: var(--teal);
-            border-radius: 2px;
-            height: 3px;
-            animation: wave-a 1.1s ease-in-out infinite;
-        }
-
-        .w-bar:nth-child(1) { animation-delay: 0.00s; }
-        .w-bar:nth-child(2) { animation-delay: 0.12s; }
-        .w-bar:nth-child(3) { animation-delay: 0.24s; }
-        .w-bar:nth-child(4) { animation-delay: 0.36s; }
-        .w-bar:nth-child(5) { animation-delay: 0.48s; }
-        .w-bar:nth-child(6) { animation-delay: 0.36s; }
-        .w-bar:nth-child(7) { animation-delay: 0.24s; }
-
-        @keyframes wave-a { 0%, 100% { height: 3px; } 50% { height: 20px; } }
-
-        .rec-hint {
-            font-family: var(--mono);
-            font-size: 11px;
-            letter-spacing: 0.04em;
-            color: var(--t3);
-            text-align: center;
-        }
-
-        .stream-settings {
-            display: flex;
-            flex-direction: column;
-            align-items: stretch;
-            gap: 12px;
-            width: min(100%, 340px);
-        }
-
-        .field-label {
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--t3);
-            text-align: center;
-        }
-
-        .stream-select {
-            width: 100%;
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--b2);
-            background: var(--s2);
-            color: var(--t1);
-            font-family: var(--mono);
-            font-size: 12px;
-            cursor: pointer;
-            transition: border-color 0.2s ease, opacity 0.2s ease;
-        }
-
-        .stream-select:hover:not(:disabled) { border-color: var(--teal-b); }
-        .stream-select:focus {
-            outline: none;
-            border-color: var(--teal);
-            box-shadow: 0 0 0 2px var(--teal-glow);
-        }
-
-        .stream-select:disabled {
-            opacity: 0.55;
-            cursor: not-allowed;
-        }
-
-        .dictation-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 10px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--b2);
-            background: var(--s2);
-            cursor: pointer;
-            transition: border-color 0.2s ease, opacity 0.2s ease;
-        }
-
-        .dictation-toggle:hover:not(:has(input:disabled)) { border-color: var(--teal-b); }
-        .dictation-toggle:has(input:disabled) {
-            opacity: 0.55;
-            cursor: not-allowed;
-        }
-
-        .dictation-toggle input {
-            accent-color: var(--teal);
-            cursor: inherit;
-        }
-
-        .dictation-toggle span {
-            font-family: var(--mono);
-            font-size: 12px;
-            color: var(--t2);
-        }
-
-        .tx-final { color: var(--t1); }
-        .tx-interim {
-            color: var(--t3);
-            font-style: italic;
-        }
-
-        .tx-legend {
-            font-family: var(--mono);
-            font-size: 10px;
-            color: var(--t3);
-            letter-spacing: 0.04em;
-        }
-
-        .field-hint {
-            font-family: var(--mono);
-            font-size: 10px;
-            color: var(--t3);
-            text-align: center;
-            line-height: 1.45;
-        }
-
-        .setup-banner,
-        .alert-banner {
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-family: var(--mono);
-            font-size: 11px;
-            line-height: 1.5;
-            margin-bottom: 16px;
-        }
-
-        .setup-banner[hidden],
-        .alert-banner[hidden] {
-            display: none !important;
-        }
-
-        .setup-banner {
-            background: var(--amber-glow);
-            border: 1px solid var(--amber-b);
-            color: var(--amber);
-        }
-
-        .alert-banner {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 12px;
-            background: var(--red-glow);
-            border: 1px solid var(--red-b);
-            color: var(--red);
-        }
-
-        .alert-banner button {
-            background: transparent;
-            border: 1px solid var(--red-b);
-            color: var(--red);
-            border-radius: 4px;
-            padding: 2px 8px;
-            cursor: pointer;
-            font-family: var(--mono);
-            font-size: 10px;
-        }
-
-        .chip.live.config { color: var(--teal); border-color: var(--teal-b); }
-
-        .panel-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        .panel-btn {
-            font-family: var(--mono);
-            font-size: 10px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            padding: 5px 10px;
-            border-radius: 6px;
-            border: 1px solid var(--b2);
-            background: var(--s2);
-            color: var(--t2);
-            cursor: pointer;
-        }
-
-        .panel-btn:hover:not(:disabled) { border-color: var(--teal-b); color: var(--t1); }
-        .panel-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-        .word-debug {
-            border-top: 1px solid var(--b1);
-            padding: 12px 18px 16px;
-            font-family: var(--mono);
-            font-size: 11px;
-            color: var(--t2);
-        }
-
-        .word-debug table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 8px;
-        }
-
-        .word-debug th,
-        .word-debug td {
-            text-align: left;
-            padding: 4px 6px;
-            border-bottom: 1px solid var(--b1);
-        }
-
-        .rec-btn:focus-visible {
-            outline: 2px solid var(--teal);
-            outline-offset: 3px;
-        }
-
-        .w-bar {
-            transition: height 0.08s ease;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .ring.pulse,
-            .cursor,
-            .w-bar { animation: none; transition: none; }
-        }
-
-        /* ── Transcript ──────────────────────────────────────── */
-        .tx-body {
-            flex: 1;
-            padding: 24px 24px 28px;
-            font-family: var(--mono);
-            font-size: 14px;
-            font-weight: 300;
-            line-height: 1.95;
-            color: var(--t1);
-            min-height: 160px;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-
-        .tx-placeholder {
-            color: var(--t3);
-            font-style: italic;
-            font-size: 13px;
-        }
-
-        .cursor {
-            display: inline-block;
-            width: 2px;
-            height: 1.1em;
-            background: var(--teal);
-            vertical-align: text-bottom;
-            margin-left: 2px;
-            animation: cursor-blink 1s step-end infinite;
-        }
-
-        @keyframes cursor-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-        /* ── Status History ─────────────────────────────────── */
-        .history-body {
-            max-height: 200px;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: var(--b2) transparent;
-        }
-
-        .history-body::-webkit-scrollbar       { width: 3px; }
-        .history-body::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 2px; }
-
-        .h-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 9px 18px;
-            border-bottom: 1px solid var(--b1);
-            animation: slide-in 0.2s ease;
-        }
-
-        .h-row:last-child { border-bottom: none; }
-
-        @keyframes slide-in {
-            from { opacity: 0; transform: translateY(-5px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .h-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            flex-shrink: 0;
-            background: var(--t3);
-        }
-
-        .h-dot.connected    { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
-        .h-dot.connecting,
-        .h-dot.starting,
-        .h-dot.reconnecting { background: var(--amber); }
-        .h-dot.error        { background: var(--red); }
-
-        .h-label {
-            font-family: var(--mono);
-            font-size: 11px;
-            color: var(--t2);
-            flex: 1;
-        }
-
-        .h-ts {
-            font-family: var(--mono);
-            font-size: 10px;
-            color: var(--t3);
-        }
-
-        .empty-state {
-            padding: 20px 18px;
-            font-family: var(--mono);
-            font-size: 11px;
-            color: var(--t3);
-            font-style: italic;
-        }
-
-        /* ── Event Log ──────────────────────────────────────── */
-        .event-panel { flex: 1; }
-
-        .event-body {
-            flex: 1;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: var(--b2) transparent;
-            min-height: 180px;
-            max-height: 340px;
-        }
-
-        .event-body::-webkit-scrollbar       { width: 3px; }
-        .event-body::-webkit-scrollbar-thumb { background: var(--b2); border-radius: 2px; }
-
-        .ev-row {
-            padding: 9px 18px;
-            border-bottom: 1px solid var(--b1);
-            font-family: var(--mono);
-            font-size: 11px;
-            line-height: 1.55;
-            animation: slide-in 0.2s ease;
-        }
-
-        .ev-row:last-child { border-bottom: none; }
-
-        .ev-head {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-
-        .ev-tag {
-            font-size: 9px;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-weight: 600;
-        }
-
-        .ev-tag.STATUS     { background: var(--amber-glow); color: var(--amber); }
-        .ev-tag.TRANSCRIPT { background: var(--teal-glow);  color: var(--teal);  }
-        .ev-tag.ERROR      { background: var(--red-glow);   color: var(--red);   }
-        .ev-tag.COMPLETE   { background: var(--blue-glow);  color: var(--blue);  }
-        .ev-tag.CONFIG,
-        .ev-tag.LANGUAGE,
-        .ev-tag.ACTION   { background: var(--s2); color: var(--t2); border: 1px solid var(--b2); }
-
-        .ev-ts { color: var(--t3); font-size: 10px; }
-
-        .ev-data       { color: var(--t2); word-break: break-word; }
-        .ev-data-em    { color: var(--t1); }
-        .ev-data-aside { color: var(--t3); }
-
-        .ev-empty {
-            padding: 24px 18px;
-            font-family: var(--mono);
-            font-size: 11px;
-            color: var(--t3);
-            font-style: italic;
-            text-align: center;
-        }
-
-        /* ── Footer ─────────────────────────────────────────── */
-        .footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px 0 0;
-            border-top: 1px solid var(--b1);
-            margin-top: 24px;
-            font-family: var(--mono);
-            font-size: 10px;
-            color: var(--t3);
-            letter-spacing: 0.07em;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        /* ── Animations ─────────────────────────────────────── */
-        @keyframes fade-up {
-            from { opacity: 0; transform: translateY(14px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-
-        .header    { animation: fade-up 0.4s ease both; }
-        .main-grid { animation: fade-up 0.4s ease 0.07s both; }
-        .footer    { animation: fade-up 0.4s ease 0.14s both; }
-
-        /* ── Responsive ─────────────────────────────────────── */
-        @media (max-width: 900px) {
-            .main-grid { grid-template-columns: 1fr; }
-            .right-col { flex-direction: row; }
-            .history-body { max-height: 160px; }
-            .event-body   { min-height: 120px; max-height: 200px; }
-        }
-
-        @media (max-width: 600px) {
-            .app { padding: 0 16px 32px; }
-            .right-col { flex-direction: column; }
-            .header-right { flex-wrap: wrap; justify-content: flex-end; }
-            .chip { font-size: 9px; padding: 4px 8px; }
-        }
-    </style>
-</head>
-
-<body>
-    <div class="app">
-
-        <div class="setup-banner" id="setupBanner" hidden></div>
-        <div class="alert-banner" id="alertBanner" hidden>
-            <span id="alertBannerText"></span>
-            <button type="button" id="alertBannerDismiss">dismiss</button>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sully API Playground</title>
+    <link rel="icon" href="/logo-192x192.png" />
+    <link rel="stylesheet" href="/playground.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to playground</a>
+    <div class="app-shell">
+      <header class="site-header">
+        <a class="brand" href="/" aria-label="Sully API Playground home">
+          <img src="/logo-192x192.png" alt="" width="40" height="40" />
+          <span>
+            <strong>Sully</strong>
+            <small>API Playground</small>
+          </span>
+        </a>
+        <div class="connection" data-connection-state="checking">
+          <span class="connection-dot" aria-hidden="true"></span>
+          <span data-connection-label>Checking setup</span>
         </div>
+      </header>
 
-        <!-- ── Header ──────────────────────────────────────────── -->
-        <header class="header">
-            <div class="logo">
-                <img class="logo-img" src="logo-192x192.png" alt="Sully logo">
-                <div class="logo-word">Sully.ai</div>
-                <div class="logo-sep"></div>
-                <div class="logo-sub">streaming demo</div>
-            </div>
-            <div class="header-right">
-                <div class="chip config" id="configChip">—</div>
-                <div class="chip" id="wordChip">0 words</div>
-                <div class="chip" id="durationChip">00:00</div>
-                <div class="status-pill disconnected" id="statusPill">
-                    <div class="s-dot"></div>
-                    <span id="statusText">disconnected</span>
-                </div>
-            </div>
-        </header>
+      <main id="main-content">
+        <section class="hero" aria-labelledby="page-title">
+          <div>
+            <p class="eyebrow">One local workspace · Five API workflows</p>
+            <h1 id="page-title">Sully API Playground</h1>
+            <p class="hero-copy">
+              Test live speech, audio transcription, clinical notes, medical coding, and
+              structured JSON without sending API credentials to the browser.
+            </p>
+          </div>
+          <dl class="privacy-card">
+            <div><dt>Credentials</dt><dd>Server only</dd></div>
+            <div><dt>Clinical data</dt><dd>Memory only</dd></div>
+            <div><dt>Environment</dt><dd>Localhost</dd></div>
+          </dl>
+        </section>
 
-        <!-- ── Main Grid ─────────────────────────────────────────── -->
-        <div class="main-grid">
-
-            <!-- Left -->
-            <div class="left-col">
-
-                <!-- Record control -->
-                <div class="panel">
-                    <div class="record-section">
-                        <div class="btn-wrap">
-                            <div class="ring" id="ring1"></div>
-                            <div class="ring" id="ring2"></div>
-                            <button class="rec-btn" id="recBtn" type="button" aria-pressed="false" aria-busy="false" aria-label="Start or stop recording">
-                                <!-- Mic icon (default) -->
-                                <svg id="micIco" class="btn-ico" width="28" height="28" viewBox="0 0 24 24"
-                                     fill="none" stroke="currentColor" stroke-width="1.5"
-                                     stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="2" width="6" height="12" rx="3"/>
-                                    <path d="M5 10a7 7 0 0 0 14 0"/>
-                                    <line x1="12" y1="19" x2="12" y2="22"/>
-                                    <line x1="8"  y1="22" x2="16" y2="22"/>
-                                </svg>
-                                <!-- Stop icon (recording) -->
-                                <svg id="stopIco" class="btn-ico" width="28" height="28" viewBox="0 0 24 24"
-                                     fill="none" stroke="currentColor" stroke-width="1.5"
-                                     stroke-linecap="round" stroke-linejoin="round"
-                                     style="display:none">
-                                    <rect x="7" y="7" width="10" height="10" rx="2"/>
-                                </svg>
-                                <span class="btn-lbl" id="btnLbl">record</span>
-                            </button>
-                        </div>
-
-                        <div class="waveform" id="waveform">
-                            <div class="w-bar"></div>
-                            <div class="w-bar"></div>
-                            <div class="w-bar"></div>
-                            <div class="w-bar"></div>
-                            <div class="w-bar"></div>
-                            <div class="w-bar"></div>
-                            <div class="w-bar"></div>
-                        </div>
-
-                        <div class="stream-settings">
-                            <div>
-                                <label class="field-label" for="languageSelect">transcription language</label>
-                                <select class="stream-select" id="languageSelect" aria-label="Transcription language"></select>
-                            </div>
-                            <div>
-                                <label class="field-label" for="durationSelect">session duration</label>
-                                <select class="stream-select" id="durationSelect" aria-label="Session duration">
-                                    <option value="0">Manual — stop when ready</option>
-                                    <option value="30">30 seconds</option>
-                                    <option value="60">1 minute</option>
-                                    <option value="300">5 minutes</option>
-                                </select>
-                            </div>
-                            <label class="dictation-toggle" for="dictationCheck" title="Formats output for dictation workflows (punctuation and casing).">
-                                <input type="checkbox" id="dictationCheck">
-                                <span>Dictation formatting</span>
-                            </label>
-                            <p class="field-hint">Dictation applies punctuation and casing suited to spoken clinical dictation.</p>
-                            <label class="dictation-toggle" for="wordDebugCheck">
-                                <input type="checkbox" id="wordDebugCheck">
-                                <span>Show word debug</span>
-                            </label>
-                        </div>
-
-                        <div class="rec-hint" id="recHint">Click to start recording your microphone</div>
-                    </div>
-                </div>
-
-                <!-- Transcript -->
-                <div class="panel" style="flex:1">
-                    <div class="panel-head">
-                        <div class="panel-tag">
-                            <div class="panel-dot" id="txDot"></div>
-                            live transcript
-                        </div>
-                        <div class="panel-info">
-                            <span class="tx-legend">Italic = in progress · solid = finalized</span>
-                            <span id="txMeta"> — </span>
-                        </div>
-                    </div>
-                    <div class="panel-head" style="border-top:1px solid var(--b1); border-bottom:none; padding-top:10px;">
-                        <div class="panel-actions">
-                            <button type="button" class="panel-btn" id="copyBtn" disabled>Copy</button>
-                            <button type="button" class="panel-btn" id="newSessionBtn">New session</button>
-                        </div>
-                    </div>
-                    <div class="tx-body" id="txBody" aria-live="polite" aria-atomic="false">
-                        <span class="tx-placeholder" id="txPlaceholder">
-                            Transcript will appear here once recording begins...
-                        </span>
-                    </div>
-                    <div class="word-debug" id="wordDebugPanel" hidden>
-                        <strong>Word debug</strong>
-                        <table>
-                            <thead>
-                                <tr><th>word</th><th>start</th><th>end</th><th>conf</th></tr>
-                            </thead>
-                            <tbody id="wordDebugBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- Right -->
-            <div class="right-col">
-
-                <!-- Status History -->
-                <div class="panel">
-                    <div class="panel-head">
-                        <div class="panel-tag">
-                            <div class="panel-dot" id="histDot"></div>
-                            status history
-                        </div>
-                        <div class="panel-info" id="histCount">—</div>
-                    </div>
-                    <div class="history-body" id="histList">
-                        <div class="empty-state">No status changes yet</div>
-                    </div>
-                </div>
-
-                <!-- Event Log -->
-                <div class="panel event-panel">
-                    <div class="panel-head">
-                        <div class="panel-tag">
-                            <div class="panel-dot" id="evDot"></div>
-                            event log
-                        </div>
-                        <div class="panel-info panel-actions">
-                            <span id="evCount">—</span>
-                            <button type="button" class="panel-btn" id="clearLogBtn">Clear</button>
-                        </div>
-                    </div>
-                    <div class="event-body" id="evList">
-                        <div class="ev-empty">SDK events will appear here</div>
-                    </div>
-                </div>
-
-            </div>
+        <div class="setup-banner" role="status" data-setup-status>
+          <span class="setup-icon" aria-hidden="true">•••</span>
+          <span data-setup-message>Checking local API configuration…</span>
         </div>
+        <div class="global-alert" role="alert" data-global-alert hidden></div>
+        <div class="sr-only" aria-live="polite" data-announcer></div>
 
-        <!-- ── Footer ──────────────────────────────────────────── -->
-        <footer class="footer">
-            <span>sully.ai · realtime medical transcription · <a href="https://docs.sully.ai/api-reference/audio-transcriptions/streaming" target="_blank" rel="noopener noreferrer" style="color:var(--t2)">API docs</a></span>
-            <span id="sessionId">—</span>
-        </footer>
+        <nav class="workflow-nav" aria-label="API workflows">
+          <div class="tab-list" role="tablist" aria-label="Sully API workflows">
+            <button id="tab-streaming" class="workflow-tab" type="button" role="tab"
+              aria-selected="true" aria-controls="panel-streaming" tabindex="0"
+              data-workflow-tab="streaming">
+              <span class="tab-number">01</span><span>Live streaming</span>
+            </button>
+            <button id="tab-transcription" class="workflow-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="panel-transcription" tabindex="-1"
+              data-workflow-tab="transcription">
+              <span class="tab-number">02</span><span>Transcription</span>
+            </button>
+            <button id="tab-notes" class="workflow-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="panel-notes" tabindex="-1"
+              data-workflow-tab="notes">
+              <span class="tab-number">03</span><span>Note generation</span>
+            </button>
+            <button id="tab-coding" class="workflow-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="panel-coding" tabindex="-1"
+              data-workflow-tab="coding">
+              <span class="tab-number">04</span><span>Medical coding</span>
+            </button>
+            <button id="tab-text-to-json" class="workflow-tab" type="button" role="tab"
+              aria-selected="false" aria-controls="panel-text-to-json" tabindex="-1"
+              data-workflow-tab="text-to-json">
+              <span class="tab-number">05</span><span>Text to JSON</span>
+            </button>
+          </div>
+        </nav>
 
+        <section id="panel-streaming" class="workflow-panel" role="tabpanel"
+          aria-labelledby="tab-streaming" data-workflow-panel="streaming">
+          <div class="panel-heading">
+            <div><p class="endpoint">WebSocket · /v1/audio/transcriptions/stream</p>
+              <h2>Live streaming</h2>
+              <p>Capture microphone audio and watch finalized words arrive in real time.</p>
+            </div><span class="version-badge">v1 · realtime</span>
+          </div>
+          <div class="workflow-grid">
+            <form class="workflow-form" data-workflow-form="streaming" autocomplete="off">
+              <div class="field-row">
+                <label class="field"><span>Language</span>
+                  <select name="language"><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select>
+                </label>
+                <label class="field"><span>Token lifetime</span>
+                  <select name="expiresIn"><option value="3600">1 hour</option><option value="300">5 minutes</option><option value="86400">24 hours</option></select>
+                </label>
+              </div>
+              <div class="check-grid">
+                <label class="check"><input type="checkbox" name="dictation" checked /><span><strong>Medical dictation</strong><small>Optimize for clinical language</small></span></label>
+                <label class="check"><input type="checkbox" name="wordDebug" /><span><strong>Word details</strong><small>Show timing and confidence</small></span></label>
+              </div>
+              <div class="form-actions">
+                <button class="primary-button" type="submit" data-api-action data-stream-start disabled>Start recording</button>
+                <button class="secondary-button" type="button" data-stream-stop disabled>Stop</button>
+              </div>
+              <p class="form-hint">Your browser asks for microphone access when recording starts.</p>
+            </form>
+            <section class="result-view live-result" aria-labelledby="streaming-result-title" data-result-view="streaming">
+              <header class="result-header"><div><span class="result-kicker">Live output</span><h3 id="streaming-result-title">Transcript</h3></div><span class="result-status" data-result-status>Ready</span></header>
+              <div class="result-empty" data-result-empty>Start recording to see live transcript text.</div>
+              <pre class="result-formatted" data-result-formatted hidden></pre>
+              <details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details>
+              <footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button></footer>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-transcription" class="workflow-panel" role="tabpanel"
+          aria-labelledby="tab-transcription" data-workflow-panel="transcription" hidden>
+          <div class="panel-heading"><div><p class="endpoint">POST · /v2/audio/transcriptions</p><h2>Uploaded transcription</h2><p>Upload audio or use the bundled non-PHI sample, then follow processing to completion.</p></div><span class="version-badge">v2 · async</span></div>
+          <div class="workflow-grid">
+            <form class="workflow-form" data-workflow-form="transcription" autocomplete="off">
+              <label class="file-drop"><span class="file-drop-title">Choose an audio file</span><span class="file-drop-help">WAV, MP3, FLAC, OGG, WebM, MP4, M4A, AAC, or Opus · up to 100&nbsp;MB</span><input type="file" name="audio" accept="audio/*,.mp4" /></label>
+              <button class="sample-button" type="button" data-api-action data-use-sample disabled>Use bundled sample</button>
+              <div class="field-row"><label class="field"><span>Language</span><select name="language"><option value="en">English</option><option value="en-US">English (US)</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label></div>
+              <div class="check-grid"><label class="check"><input type="checkbox" name="dictation" checked /><span><strong>Medical dictation</strong><small>Clinical speech model</small></span></label><label class="check"><input type="checkbox" name="multichannel" /><span><strong>Multichannel</strong><small>Separate audio channels</small></span></label></div>
+              <div class="form-actions"><button class="primary-button" type="submit" data-api-action disabled>Transcribe audio</button></div>
+            </form>
+            <section class="result-view" aria-labelledby="transcription-result-title" data-result-view="transcription">
+              <header class="result-header"><div><span class="result-kicker">API output</span><h3 id="transcription-result-title">Transcript</h3></div><span class="result-status" data-result-status>Ready</span></header>
+              <div class="result-empty" data-result-empty>Completed transcript will appear here.</div><pre class="result-formatted" data-result-formatted hidden></pre><details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details>
+              <footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button><button type="button" class="text-button" data-handoff="transcription:notes" disabled>Use for note</button><button type="button" class="text-button" data-handoff="transcription:coding" disabled>Use for coding</button></footer>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-notes" class="workflow-panel" role="tabpanel" aria-labelledby="tab-notes" data-workflow-panel="notes" hidden>
+          <div class="panel-heading"><div><p class="endpoint">POST · /v1/notes</p><h2>Note generation</h2><p>Turn transcript text into a structured clinical note using your preferred template.</p></div><span class="version-badge">v1 · async</span></div>
+          <div class="workflow-grid">
+            <form class="workflow-form" data-workflow-form="notes" autocomplete="off">
+              <label class="field"><span>Transcript</span><textarea name="transcript" rows="9" placeholder="Paste a clinical transcript or send one from transcription…" required></textarea></label>
+              <div class="field-row"><label class="field"><span>Encounter date</span><input type="date" name="date" required /></label><label class="field"><span>Language</span><select name="language"><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label></div>
+              <label class="field"><span>Note template</span><textarea name="template" rows="5" required>SOAP note with Subjective, Objective, Assessment, and Plan sections.</textarea></label>
+              <label class="check"><input type="checkbox" name="includeJson" /><span><strong>Include structured JSON</strong><small>Request JSON alongside Markdown</small></span></label>
+              <div class="form-actions"><button class="primary-button" type="submit" data-api-action disabled>Generate note</button></div>
+            </form>
+            <section class="result-view" aria-labelledby="notes-result-title" data-result-view="notes">
+              <header class="result-header"><div><span class="result-kicker">API output</span><h3 id="notes-result-title">Clinical note</h3></div><span class="result-status" data-result-status>Ready</span></header>
+              <div class="result-empty" data-result-empty>Generated note will appear here as plain text.</div><pre class="result-formatted" data-result-formatted hidden></pre><details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details>
+              <footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button><button type="button" class="text-button" data-handoff="notes:coding" disabled>Send to coding</button></footer>
+            </section>
+          </div>
+        </section>
+
+        <section id="panel-coding" class="workflow-panel" role="tabpanel" aria-labelledby="tab-coding" data-workflow-panel="coding" hidden>
+          <div class="panel-heading"><div><p class="endpoint">POST · /v1/codings</p><h2>Medical coding</h2><p>Extract diagnosis and procedure codes with source-text evidence.</p></div><span class="version-badge">v1 · async</span></div>
+          <div class="workflow-grid">
+            <form class="workflow-form" data-workflow-form="coding" autocomplete="off"><label class="field"><span>Clinical text</span><textarea name="text" rows="15" placeholder="Paste a note, assessment, or transcript…" required></textarea></label><div class="form-actions"><button class="primary-button" type="submit" data-api-action disabled>Run medical coding</button></div></form>
+            <section class="result-view" aria-labelledby="coding-result-title" data-result-view="coding"><header class="result-header"><div><span class="result-kicker">API output</span><h3 id="coding-result-title">Codes</h3></div><span class="result-status" data-result-status>Ready</span></header><div class="result-empty" data-result-empty>Diagnoses and procedures will appear here.</div><pre class="result-formatted" data-result-formatted hidden></pre><details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details><footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button></footer></section>
+          </div>
+        </section>
+
+        <section id="panel-text-to-json" class="workflow-panel" role="tabpanel" aria-labelledby="tab-text-to-json" data-workflow-panel="text-to-json" hidden>
+          <div class="panel-heading"><div><p class="endpoint">POST · /v1/utils/text-to-json</p><h2>Text to JSON</h2><p>Describe the object you need, supply a JSON schema, and inspect the structured result.</p></div><span class="version-badge">v1 · sync</span></div>
+          <div class="workflow-grid">
+            <form class="workflow-form" data-workflow-form="text-to-json" autocomplete="off"><label class="field"><span>Source text</span><textarea name="text" rows="8" placeholder="Example: Patient is 42 years old and reports a penicillin allergy." required></textarea></label><label class="field"><span>Output schema (JSON object)</span><textarea class="code-input" name="schema" rows="9" spellcheck="false" required>{
+  "age": "number",
+  "allergies": ["string"]
+}</textarea></label><div class="form-actions"><button class="primary-button" type="submit" data-api-action disabled>Convert to JSON</button></div></form>
+            <section class="result-view" aria-labelledby="text-json-result-title" data-result-view="text-to-json"><header class="result-header"><div><span class="result-kicker">API output</span><h3 id="text-json-result-title">Structured JSON</h3></div><span class="result-status" data-result-status>Ready</span></header><div class="result-empty" data-result-empty>Validated JSON output will appear here.</div><pre class="result-formatted" data-result-formatted hidden></pre><details class="raw-result" data-result-raw-wrap hidden><summary>Raw response</summary><pre data-result-raw></pre></details><footer class="result-actions"><button type="button" class="text-button" data-result-copy disabled>Copy result</button></footer></section>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer"><span>Sully API Playground · local development only</span><a href="https://docs.sully.ai/api-reference-v2/" target="_blank" rel="noreferrer">API documentation</a></footer>
     </div>
 
+    <dialog class="navigation-dialog" data-navigation-dialog aria-labelledby="navigation-dialog-title">
+      <form method="dialog"><h2 id="navigation-dialog-title">Stop active workflow?</h2><p data-navigation-message>Current workflow must stop before switching.</p><div class="dialog-actions"><button class="secondary-button" value="cancel">Cancel</button><button class="danger-button" value="confirm">Stop and switch</button></div></form>
+    </dialog>
     <script type="module" src="/assets/playground-app.js"></script>
-</body>
+  </body>
 </html>

@@ -6,8 +6,8 @@ test('main start serves the browser demo without page errors', async ({ page }) 
 
   await page.goto('/');
 
-  await expect(page).toHaveTitle('Sully — WebSocket Streaming Demo');
-  await expect(page.getByRole('button', { name: 'Start or stop recording' })).toBeVisible();
+  await expect(page).toHaveTitle('Sully API Playground');
+  await expect(page.getByRole('heading', { name: 'Sully API Playground' })).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

@@ -68,7 +68,7 @@ function securityPolicy(config: ServerConfig): string {
     "media-src 'self' blob:",
     "object-src 'none'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline'",
+    "style-src 'self'",
     `connect-src ${connectSources.join(' ')}`,
     "worker-src 'self' blob:",
   ].join('; ');
