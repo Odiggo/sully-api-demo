@@ -80,12 +80,13 @@ async function listen(server: ReturnType<typeof createServer>): Promise<string> 
 
 async function createFakeRecorder(): Promise<{ directory: string; pathValue: string }> {
   const directory = await mkdtemp(path.join(tmpdir(), 'sully-stream-recorder-'));
-  const executable = path.join(directory, 'rec');
-  await writeFile(
-    executable,
-    '#!/usr/bin/env node\nprocess.stdout.write(Buffer.from([1, 2, 3, 4]));\nsetInterval(() => {}, 1000);\n',
-  );
-  await chmod(executable, 0o755);
+  const script =
+    '#!/usr/bin/env node\nprocess.stdout.write(Buffer.from([1, 2, 3, 4]));\nsetInterval(() => {}, 1000);\n';
+  for (const executableName of ['rec', 'arecord']) {
+    const executable = path.join(directory, executableName);
+    await writeFile(executable, script);
+    await chmod(executable, 0o755);
+  }
   return { directory, pathValue: `${directory}:${process.env.PATH ?? ''}` };
 }
 
