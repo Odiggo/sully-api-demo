@@ -24,21 +24,46 @@ test('builds exact transcription multipart fields', () => {
   assert.equal(data.get('multichannel'), 'true');
 });
 
-test('builds exact custom note request', () => {
+test('builds exact requests for all stable note modes', () => {
+  const common = { transcript: 'Exact transcript', date: '2026-07-13', language: 'en' };
+  const structuredTemplate = {
+    id: 'soap-template',
+    title: 'SOAP note',
+    sections: [{ type: 'heading', title: 'Assessment' }],
+  };
+  assert.deepEqual(buildNoteRequest({ ...common, noteType: { type: 'soap' } }), {
+    ...common,
+    noteType: { type: 'soap' },
+  });
   assert.deepEqual(
     buildNoteRequest({
-      transcript: 'Exact transcript',
-      date: '2026-07-13',
-      language: 'en',
-      template: 'SOAP',
-      includeJson: true,
-    }),
-    {
-      transcript: 'Exact transcript',
-      date: '2026-07-13',
-      language: 'en',
+      ...common,
       noteType: { type: 'note_style', template: 'SOAP', includeJson: true },
-    },
+    }),
+    { ...common, noteType: { type: 'note_style', template: 'SOAP', includeJson: true } },
+  );
+  assert.deepEqual(
+    buildNoteRequest({
+      ...common,
+      noteType: { type: 'note_template', templateText: JSON.stringify(structuredTemplate) },
+    }),
+    { ...common, noteType: { type: 'note_template', template: structuredTemplate } },
+  );
+});
+
+test('rejects malformed or incomplete structured note templates locally', () => {
+  const common = { transcript: 'Exact transcript', date: '2026-07-13', language: 'en' };
+  assert.throws(
+    () => buildNoteRequest({ ...common, noteType: { type: 'note_template', templateText: '{' } }),
+    /valid JSON object/i,
+  );
+  assert.throws(
+    () =>
+      buildNoteRequest({
+        ...common,
+        noteType: { type: 'note_template', templateText: '{"id":"id","title":"Title"}' },
+      }),
+    /id, title, and at least one section/i,
   );
 });
 

@@ -9,6 +9,8 @@ import {
 
 export const NOTE_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh'] as const;
 export const noteLanguageSchema = z.enum(NOTE_LANGUAGES);
+export const NOTE_MODES = ['soap', 'note_style', 'note_template'] as const;
+export const noteModeSchema = z.enum(NOTE_MODES);
 
 function isRealDate(value: string): boolean {
   const parsed = new Date(`${value}T00:00:00Z`);
@@ -25,16 +27,34 @@ const patientInfoSchema = z.strictObject({
   gender: z.enum(['male', 'female', 'other', 'prefer not to say', 'unspecified']).optional(),
 });
 
-export const noteRequestSchema = z.strictObject({
-  transcript: nonBlankStringSchema,
-  date: encounterDateSchema,
-  language: noteLanguageSchema.default('en'),
-  noteType: z.strictObject({
+const structuredNoteTemplateSchema = z.intersection(
+  jsonObjectSchema,
+  z.object({
+    id: nonBlankStringSchema,
+    title: nonBlankStringSchema,
+    sections: z.array(jsonObjectSchema).min(1),
+  }),
+);
+
+const noteTypeSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('soap') }),
+  z.strictObject({
     description: nonBlankStringSchema.optional(),
     type: z.literal('note_style'),
     template: nonBlankStringSchema,
     includeJson: z.boolean().default(false),
   }),
+  z.strictObject({
+    type: z.literal('note_template'),
+    template: structuredNoteTemplateSchema,
+  }),
+]);
+
+export const noteRequestSchema = z.strictObject({
+  transcript: nonBlankStringSchema,
+  date: encounterDateSchema,
+  language: noteLanguageSchema.default('en'),
+  noteType: noteTypeSchema,
   patientInfo: patientInfoSchema.optional(),
   previousNote: nonBlankStringSchema.optional(),
   context: nonBlankStringSchema.nullable().optional(),

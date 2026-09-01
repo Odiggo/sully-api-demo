@@ -142,8 +142,16 @@
             <form class="workflow-form" data-workflow-form="notes" autocomplete="off">
               <label class="field"><span>Transcript</span><textarea name="transcript" rows="9" placeholder="Paste a clinical transcript or send one from transcription…" required></textarea></label>
               <div class="field-row"><label class="field"><span>Encounter date</span><input type="date" name="date" required /></label><label class="field"><span>Language</span><select name="language"><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option></select></label></div>
-              <label class="field"><span>Note template</span><textarea name="template" rows="5" required>SOAP note with Subjective, Objective, Assessment, and Plan sections.</textarea></label>
-              <label class="check"><input type="checkbox" name="includeJson" /><span><strong>Include structured JSON</strong><small>Request JSON alongside Markdown</small></span></label>
+              <label class="field"><span>Note mode</span><select name="noteMode"><option value="note_style">Inline style</option><option value="soap">SOAP</option><option value="note_template">Structured template</option></select></label>
+              <label class="field" data-note-mode="note_style"><span>Note style</span><textarea name="styleTemplate" rows="5" required>SOAP note with Subjective, Objective, Assessment, and Plan sections.</textarea></label>
+              <label class="check" data-note-mode="note_style"><input type="checkbox" name="includeJson" /><span><strong>Include structured JSON</strong><small>Request JSON alongside Markdown</small></span></label>
+              <label class="field" data-note-mode="note_template"><span>Note template (JSON object)</span><textarea class="code-input" name="structuredTemplate" rows="12" spellcheck="false" required>{
+  "id": "soap-template",
+  "title": "SOAP note",
+  "sections": [
+    { "type": "heading", "title": "Assessment" }
+  ]
+}</textarea></label>
               <div class="form-actions"><button class="primary-button" type="submit" data-api-action disabled>Generate note</button></div>
             </form>
             <section class="result-view" aria-labelledby="notes-result-title" data-result-view="notes">

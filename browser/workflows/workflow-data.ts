@@ -14,13 +14,18 @@ export interface TranscriptionFormInput {
   multichannel: boolean;
 }
 
-export interface NoteFormInput {
+interface NoteFormBase {
   transcript: string;
   date: string;
   language: string;
-  template: string;
-  includeJson: boolean;
 }
+
+export type NoteFormInput = NoteFormBase & {
+  noteType:
+    | { type: 'soap' }
+    | { type: 'note_style'; template: string; includeJson: boolean }
+    | { type: 'note_template'; templateText: string };
+};
 
 export interface TextToJsonFormInput {
   text: string;
@@ -58,16 +63,32 @@ export function buildTranscriptionFormData(input: TranscriptionFormInput): FormD
 }
 
 export function buildNoteRequest(input: NoteFormInput): NoteRequest {
-  return noteRequestSchema.parse({
+  const requestBase = {
     transcript: input.transcript,
     date: input.date,
     language: input.language,
-    noteType: {
-      type: 'note_style',
-      template: input.template,
-      includeJson: input.includeJson,
-    },
+  };
+  if (input.noteType.type === 'soap') {
+    return noteRequestSchema.parse({ ...requestBase, noteType: { type: 'soap' } });
+  }
+  if (input.noteType.type === 'note_style') {
+    return noteRequestSchema.parse({ ...requestBase, noteType: input.noteType });
+  }
+
+  let template: unknown;
+  try {
+    template = JSON.parse(input.noteType.templateText);
+  } catch {
+    throw new Error('Note template must be a valid JSON object.');
+  }
+  const parsed = noteRequestSchema.safeParse({
+    ...requestBase,
+    noteType: { type: 'note_template', template },
   });
+  if (!parsed.success) {
+    throw new Error('Note template must include nonblank id, title, and at least one section.');
+  }
+  return parsed.data;
 }
 
 export function buildCodingRequest(text: string): CodingRequest {
