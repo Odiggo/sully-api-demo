@@ -4,7 +4,9 @@ import fetch from 'node-fetch';
 import mic from 'node-microphone';
 import WebSocket from 'ws';
 
+import { upstreamStreamingTokenSchema } from './contracts/index.js';
 import { buildStreamingWebSocketUrl } from './streaming-client.js';
+import { parseStreamingMessage } from './streaming-message.js';
 
 dotenv.config();
 
@@ -17,22 +19,18 @@ interface Environment {
 }
 
 function loadEnvironment(): Environment {
-  const required = {
-    SULLY_API_URL: process.env.SULLY_API_URL,
-    SULLY_API_KEY: process.env.SULLY_API_KEY,
-    SULLY_ACCOUNT_ID: process.env.SULLY_ACCOUNT_ID,
-  };
-  const missing = Object.entries(required)
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-  if (missing.length > 0) {
+  const apiUrl = process.env.SULLY_API_URL;
+  const apiKey = process.env.SULLY_API_KEY;
+  const accountId = process.env.SULLY_ACCOUNT_ID;
+  if (!apiUrl || !apiKey || !accountId) {
+    const missing = [
+      !apiUrl && 'SULLY_API_URL',
+      !apiKey && 'SULLY_API_KEY',
+      !accountId && 'SULLY_ACCOUNT_ID',
+    ].filter((name): name is string => Boolean(name));
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-  return {
-    apiUrl: required.SULLY_API_URL!,
-    apiKey: required.SULLY_API_KEY!,
-    accountId: required.SULLY_ACCOUNT_ID!,
-  };
+  return { apiUrl, apiKey, accountId };
 }
 
 const logger = {
@@ -41,22 +39,6 @@ const logger = {
   success: (message: string) => console.log(message),
   error: (message: string) => console.error(message),
 };
-
-function readStreamingToken(payload: unknown): string {
-  if (
-    typeof payload !== 'object' ||
-    payload === null ||
-    !('data' in payload) ||
-    typeof payload.data !== 'object' ||
-    payload.data === null ||
-    !('token' in payload.data) ||
-    typeof payload.data.token !== 'string' ||
-    payload.data.token.length === 0
-  ) {
-    throw new Error('Streaming token response did not include a token');
-  }
-  return payload.data.token;
-}
 
 async function requestStreamingToken(environment: Environment): Promise<string> {
   const response = await fetch(
@@ -74,7 +56,7 @@ async function requestStreamingToken(environment: Environment): Promise<string> 
   if (!response.ok) {
     throw new Error(`Streaming token request failed with status ${response.status}`);
   }
-  return readStreamingToken(await response.json());
+  return upstreamStreamingTokenSchema.parse(await response.json()).token;
 }
 
 async function demonstrateStreaming({
@@ -120,18 +102,30 @@ async function demonstrateStreaming({
     const microphone = new mic({ rate: 16000, channels: 1, bitwidth: 16 });
     let countdown: NodeJS.Timeout | undefined;
     let durationTimer: NodeJS.Timeout | undefined;
+    let microphoneStarted = false;
+    let settled = false;
 
-    const stop = () => {
+    const stopTransport = () => {
       if (countdown) clearInterval(countdown);
       if (durationTimer) clearTimeout(durationTimer);
-      process.off('SIGINT', stop);
+      process.off('SIGINT', handleInterrupt);
       microphone.stopRecording();
-      if (ws.readyState === WebSocket.OPEN) ws.close();
+      if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
     };
 
-    process.once('SIGINT', stop);
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      stopTransport();
+      if (error) reject(error);
+      else resolve();
+    };
 
-    ws.on('open', () => {
+    const handleInterrupt = () => finish();
+
+    const startMicrophone = () => {
+      if (microphoneStarted || settled) return;
+      microphoneStarted = true;
       logger.info('Streaming active. Start speaking.');
       const micStream = microphone.startRecording();
       micStream.on('data', (data: Buffer) => {
@@ -147,36 +141,37 @@ async function demonstrateStreaming({
           process.stdout.write(`Time remaining: ${secondsLeft} seconds\r`);
         }
       }, 1000);
-      durationTimer = setTimeout(() => {
-        stop();
-        logger.success(`Streaming demo completed after ${duration} seconds.`);
-      }, duration * 1000);
+    };
+
+    process.once('SIGINT', handleInterrupt);
+    // Runtime extends EventEmitter, but node-microphone's declaration omits it.
+    (microphone as mic & { on(event: 'error', listener: (error: Error) => void): void }).on(
+      'error',
+      (error) => finish(error),
+    );
+
+    ws.on('open', () => {
+      logger.info('WebSocket open. Waiting for provider readiness.');
     });
 
     ws.on('message', (data) => {
-      try {
-        const payload: unknown = JSON.parse(data.toString());
-        if (
-          typeof payload === 'object' &&
-          payload !== null &&
-          'text' in payload &&
-          typeof payload.text === 'string'
-        ) {
-          console.log(payload.text);
-        }
-      } catch (error) {
-        logger.error(`Unable to parse streaming message: ${String(error)}`);
+      const payload = parseStreamingMessage(data.toString());
+      if (!payload) {
+        logger.error('Unable to parse streaming message');
+        return;
       }
+      if (payload.status === 'connected') startMicrophone();
+      if (typeof payload.text === 'string') console.log(payload.text);
     });
-    ws.on('error', (error) => {
-      stop();
-      reject(error);
-    });
+    ws.on('error', (error) => finish(error));
     ws.on('close', (code, reason) => {
-      stop();
       logger.info(`WebSocket closed: ${code} ${reason.toString()}`);
-      resolve();
+      finish();
     });
+    durationTimer = setTimeout(() => {
+      logger.success(`Streaming demo completed after ${duration} seconds.`);
+      finish();
+    }, duration * 1000);
   });
 }
 

@@ -9,7 +9,7 @@ import {
 
 export const NOTE_LANGUAGES = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh'] as const;
 export const noteLanguageSchema = z.enum(NOTE_LANGUAGES);
-export const NOTE_MODES = ['soap', 'note_style', 'note_template'] as const;
+const NOTE_MODES = ['soap', 'note_style', 'note_template'] as const;
 export const noteModeSchema = z.enum(NOTE_MODES);
 
 function isRealDate(value: string): boolean {
