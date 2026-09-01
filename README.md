@@ -59,7 +59,7 @@ Agents can use the repo-local [`sully-api-demo-setup` skill](.agents/skills/sull
 | --- | --- | --- | --- | --- |
 | Live streaming | `POST /api/streaming-token` + WebSocket | `POST /v1/audio/transcriptions/stream/token` + `/v1/audio/transcriptions/stream` | Realtime microphone audio; temporary token; reconnect and explicit stop lifecycle | Interim/final transcript, optional word details |
 | Uploaded transcription | `POST /api/transcriptions`, `GET /api/transcriptions/:id` | `POST /v2/audio/transcriptions`, `GET /v2/audio/transcriptions/:id` | Async upload and bounded polling | Transcript → note generation or coding |
-| Note generation | `POST /api/notes`, `GET /api/notes/:id` | `POST /v1/notes`, `GET /v1/notes/:id` | Async note creation and bounded polling | Markdown/JSON note → coding |
+| Note generation | `POST /api/notes`, `GET /api/notes/:id` | `POST /v1/notes`, `GET /v1/notes/:id` | SOAP, inline-style, or structured-template creation with bounded polling | Markdown/JSON note → coding |
 | Medical coding | `POST /api/codings`, `GET /api/codings/:id` | `POST /v1/codings`, `GET /v1/codings/:id` | Async analysis and bounded polling | Diagnosis/procedure codes with source spans |
 | Text to JSON | `POST /api/text-to-json` | `POST /v1/utils/text-to-json` | Synchronous structured extraction | Validated JSON object |
 
@@ -87,8 +87,7 @@ pnpm typecheck         # strict server and browser TypeScript checks
 pnpm build             # build browser and server bundles
 pnpm test              # unit then integration tests
 pnpm test:e2e          # build and run Playwright browser tests
-pnpm start:note        # legacy CLI note example
-pnpm start:stream      # legacy CLI streaming example
+pnpm start:stream      # streaming-only CLI example
 ```
 
 Pull requests run the same typecheck, build, test, and Chromium E2E gates in GitHub Actions.
@@ -101,7 +100,7 @@ pnpm exec playwright install chromium
 
 Browser tests use port `3100`; set `E2E_PORT` to another integer from 1 through 65535 when needed.
 
-The two CLI scripts are retained as legacy examples, not the main demo. They can print transcript or note content, use older example flows, and do not offer the browser playground's full workflow coverage or privacy boundaries. Prefer `pnpm start`.
+Note generation lives in the browser playground, including SOAP, inline note-style instructions, and structured JSON templates. The remaining CLI is a streaming-only example. Prefer `pnpm start` for the full workflow and local server privacy boundaries.
 
 ## Architecture and safety boundaries
 
