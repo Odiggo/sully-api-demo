@@ -1,16 +1,18 @@
 import { Command } from 'commander';
 import * as dotenv from 'dotenv';
-import fetch from 'node-fetch';
 import mic from 'node-microphone';
 import WebSocket from 'ws';
 
-import { upstreamStreamingTokenSchema } from './contracts/index.js';
+import { MIN_STREAMING_TOKEN_SECONDS } from './contracts/index.js';
+import { createSullyApiClient } from './server/sully-api-client.js';
 import { buildStreamingWebSocketUrl } from './streaming-client.js';
 import { parseStreamingMessage } from './streaming-message.js';
 
 dotenv.config();
 
 const STREAMING_DEMO_DURATION = 10;
+const STREAMING_CLI_REQUEST_ID = 'streaming-cli-token';
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143 } as const;
 
 interface Environment {
   apiUrl: string;
@@ -40,39 +42,38 @@ const logger = {
   error: (message: string) => console.error(message),
 };
 
-async function requestStreamingToken(environment: Environment): Promise<string> {
-  const response = await fetch(
-    `${environment.apiUrl}/v1/audio/transcriptions/stream/token`,
-    {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': environment.apiKey,
-        'x-account-id': environment.accountId,
-      },
-      body: JSON.stringify({ expiresIn: 60 }),
-    },
-  );
-  if (!response.ok) {
-    throw new Error(`Streaming token request failed with status ${response.status}`);
-  }
-  return upstreamStreamingTokenSchema.parse(await response.json()).token;
+async function requestStreamingToken(
+  environment: Environment,
+  signal: AbortSignal,
+): Promise<string> {
+  const client = createSullyApiClient({
+    apiUrl: new URL(environment.apiUrl),
+    apiKey: environment.apiKey,
+    accountId: environment.accountId,
+  });
+  return (
+    await client.createStreamingToken(MIN_STREAMING_TOKEN_SECONDS, {
+      requestId: STREAMING_CLI_REQUEST_ID,
+      signal,
+    })
+  ).token;
 }
 
-async function demonstrateStreaming({
-  mode,
-  duration,
-  language,
-}: {
-  mode: 'client' | 'server';
+interface StreamingSessionOptions {
+  environment: Environment;
   duration: number;
+  token?: string;
   language?: string;
-}): Promise<void> {
-  const environment = loadEnvironment();
-  logger.step('Starting live audio streaming demo');
-  logger.info(`Demo will run for ${duration} seconds.`);
+  signal: AbortSignal;
+}
 
-  const token = mode === 'client' ? await requestStreamingToken(environment) : undefined;
+async function runStreamingSession({
+  environment,
+  duration,
+  token,
+  language,
+  signal,
+}: StreamingSessionOptions): Promise<void> {
   const streamConnectionParams = {
     apiUrl: `${environment.apiUrl}/v1`,
     sampleRate: 16000,
@@ -108,7 +109,7 @@ async function demonstrateStreaming({
     const stopTransport = () => {
       if (countdown) clearInterval(countdown);
       if (durationTimer) clearTimeout(durationTimer);
-      process.off('SIGINT', handleInterrupt);
+      signal.removeEventListener('abort', handleAbort);
       microphone.stopRecording();
       if (ws.readyState !== WebSocket.CLOSED) ws.terminate();
     };
@@ -121,7 +122,7 @@ async function demonstrateStreaming({
       else resolve();
     };
 
-    const handleInterrupt = () => finish();
+    const handleAbort = () => finish();
 
     const startMicrophone = () => {
       if (microphoneStarted || settled) return;
@@ -143,7 +144,11 @@ async function demonstrateStreaming({
       }, 1000);
     };
 
-    process.once('SIGINT', handleInterrupt);
+    signal.addEventListener('abort', handleAbort, { once: true });
+    if (signal.aborted) {
+      finish();
+      return;
+    }
     // Runtime extends EventEmitter, but node-microphone's declaration omits it.
     (microphone as mic & { on(event: 'error', listener: (error: Error) => void): void }).on(
       'error',
@@ -173,6 +178,42 @@ async function demonstrateStreaming({
       finish();
     }, duration * 1000);
   });
+}
+
+async function demonstrateStreaming({
+  mode,
+  duration,
+  language,
+}: {
+  mode: 'client' | 'server';
+  duration: number;
+  language?: string;
+}): Promise<void> {
+  const environment = loadEnvironment();
+  const controller = new AbortController();
+  const handleSignal = (signal: keyof typeof SIGNAL_EXIT_CODES) => {
+    process.exitCode = SIGNAL_EXIT_CODES[signal];
+    controller.abort();
+  };
+  const handleInterrupt = () => handleSignal('SIGINT');
+  const handleTerminate = () => handleSignal('SIGTERM');
+  process.once('SIGINT', handleInterrupt);
+  process.once('SIGTERM', handleTerminate);
+
+  logger.step('Starting live audio streaming demo');
+  logger.info(`Demo will run for ${duration} seconds.`);
+  try {
+    const token = mode === 'client'
+      ? await requestStreamingToken(environment, controller.signal)
+      : undefined;
+    if (controller.signal.aborted) return;
+    await runStreamingSession({ environment, duration, token, language, signal: controller.signal });
+  } catch (error: unknown) {
+    if (!controller.signal.aborted) throw error;
+  } finally {
+    process.off('SIGINT', handleInterrupt);
+    process.off('SIGTERM', handleTerminate);
+  }
 }
 
 interface StreamOptions {

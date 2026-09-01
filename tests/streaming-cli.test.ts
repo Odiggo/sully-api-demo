@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage } from 'node:http';
@@ -21,10 +21,12 @@ async function runStreamingCli({
   apiUrl,
   mode,
   pathValue = process.env.PATH,
+  onSpawn,
 }: {
   apiUrl: string;
   mode: 'client' | 'server';
   pathValue?: string;
+  onSpawn?: (child: ChildProcess) => void;
 }): Promise<CliResult> {
   const child = spawn(
     process.execPath,
@@ -46,11 +48,27 @@ async function runStreamingCli({
   child.stderr.on('data', (chunk: string) => {
     stderr += chunk;
   });
+  onSpawn?.(child);
   const deadline = setTimeout(() => child.kill('SIGKILL'), 2_500);
   const [code, signal] = await once(child, 'close') as [number | null, NodeJS.Signals | null];
   clearTimeout(deadline);
   return { code, signal, stderr };
 }
+
+test('client mode uses the canonical safe error contract for invalid tokens', async (t) => {
+  const server = createServer((_request, response) => {
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ data: { token: 'nested-token' } }));
+  });
+  const apiUrl = await listen(server);
+  t.after(() => server.close());
+
+  const result = await runStreamingCli({ apiUrl, mode: 'client' });
+
+  assert.equal(result.code, 1);
+  assert.equal(result.signal, null);
+  assert.match(result.stderr, /Sully API returned an invalid response/);
+});
 
 async function listen(server: ReturnType<typeof createServer>): Promise<string> {
   server.listen(0, '127.0.0.1');
@@ -128,6 +146,53 @@ test('duration bounds a WebSocket handshake that never opens', { timeout: 5_000 
 
   assert.deepEqual(result, { code: 0, signal: null, stderr: '' });
 });
+
+for (const [signal, expectedCode] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+] as const) {
+  test(`${signal} cancels pending client token acquisition`, async (t) => {
+    let childProcess: ChildProcess | undefined;
+    const server = createServer(() => {
+      childProcess?.kill(signal);
+    });
+    const apiUrl = await listen(server);
+    t.after(() => server.close());
+
+    const result = await runStreamingCli({
+      apiUrl,
+      mode: 'client',
+      onSpawn(child) {
+        childProcess = child;
+      },
+    });
+
+    assert.deepEqual(result, { code: expectedCode, signal: null, stderr: '' });
+  });
+
+  test(`${signal} cleans streaming resources and preserves semantic exit status`, async (t) => {
+    const heldSockets = new Set<import('node:stream').Duplex>();
+    const server = createServer();
+    server.on('upgrade', (_request, socket) => {
+      heldSockets.add(socket);
+    });
+    const apiUrl = await listen(server);
+    t.after(() => {
+      for (const socket of heldSockets) socket.destroy();
+      server.close();
+    });
+
+    const result = await runStreamingCli({
+      apiUrl,
+      mode: 'server',
+      onSpawn(child) {
+        server.once('upgrade', () => child.kill(signal));
+      },
+    });
+
+    assert.deepEqual(result, { code: expectedCode, signal: null, stderr: '' });
+  });
+}
 
 test('microphone audio waits for the provider connected status', { timeout: 5_000 }, async (t) => {
   const recorder = await createFakeRecorder();
