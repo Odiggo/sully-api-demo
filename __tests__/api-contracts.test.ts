@@ -224,19 +224,57 @@ describe('transcription contracts', () => {
 });
 
 describe('note contracts', () => {
-  const validRequest = {
+  const requestBase = {
     transcript: 'Patient reports a headache.',
     date: '2026-07-13',
     language: 'en',
-    noteType: {
-      type: 'note_style',
-      template: 'Create a SOAP note.',
-      includeJson: true,
-    },
   } as const;
 
-  test('accepts documented custom note request and rejects hostile local inputs', () => {
-    assert.equal(noteRequestSchema.parse(validRequest).noteType.type, 'note_style');
+  test('accepts each documented stable note mode', () => {
+    const requests = [
+      { ...requestBase, noteType: { type: 'soap' } },
+      {
+        ...requestBase,
+        noteType: { type: 'note_style', template: 'Create a SOAP note.', includeJson: true },
+      },
+      {
+        ...requestBase,
+        noteType: {
+          type: 'note_template',
+          template: {
+            id: 'soap-template',
+            title: 'SOAP note',
+            global_prompt: 'Use concise clinical language.',
+            sections: [{ type: 'heading', title: 'Assessment' }],
+          },
+        },
+      },
+    ] as const;
+
+    assert.deepEqual(requests.map((request) => noteRequestSchema.parse(request).noteType.type), [
+      'soap',
+      'note_style',
+      'note_template',
+    ]);
+  });
+
+  test('defaults inline style JSON output to false', () => {
+    const parsed = noteRequestSchema.parse({
+      ...requestBase,
+      noteType: { type: 'note_style', template: 'Create a SOAP note.' },
+    });
+    assert.deepEqual(parsed.noteType, {
+      type: 'note_style',
+      template: 'Create a SOAP note.',
+      includeJson: false,
+    });
+  });
+
+  test('rejects hostile note inputs and fields from another mode', () => {
+    const validRequest = {
+      ...requestBase,
+      noteType: { type: 'note_style', template: 'Create a SOAP note.', includeJson: true },
+    } as const;
     assert.equal(
       noteRequestSchema.parse({ ...validRequest, date: '2026-07-13T12:00:00Z' }).date,
       '2026-07-13T12:00:00Z',
@@ -249,6 +287,20 @@ describe('note contracts', () => {
       { ...validRequest, date: '2026-02-30' },
       { ...validRequest, language: 'EN' },
       { ...validRequest, noteType: { ...validRequest.noteType, template: '' } },
+      { ...requestBase, noteType: { type: 'soap', template: 'not allowed' } },
+      {
+        ...requestBase,
+        noteType: { type: 'note_template', template: { id: '', title: 'Title', sections: [{}] } },
+      },
+      {
+        ...requestBase,
+        noteType: { type: 'note_template', template: { id: 'id', title: ' ', sections: [{}] } },
+      },
+      {
+        ...requestBase,
+        noteType: { type: 'note_template', template: { id: 'id', title: 'Title', sections: [] } },
+      },
+      { ...requestBase, noteType: { type: 'unknown' } },
       { ...validRequest, noteType: null },
       { ...validRequest, extra: true },
     ]);

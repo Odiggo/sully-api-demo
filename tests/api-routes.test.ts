@@ -62,7 +62,12 @@ const NOT_READY_CONFIG: ServerConfig = {
 
 interface FakeClientState {
   calls: string[];
+  noteInputs: NoteRequest[];
   upload?: TranscriptionUpload;
+}
+
+function createFakeClientState(): FakeClientState {
+  return { calls: [], noteInputs: [] };
 }
 
 function createFakeClient(
@@ -79,8 +84,9 @@ function createFakeClient(
       state.calls.push('getTranscription');
       return TRANSCRIPTION;
     },
-    async createNote(_input: NoteRequest) {
+    async createNote(input: NoteRequest) {
       state.calls.push('createNote');
+      state.noteInputs.push(input);
       return NOTE_CREATED;
     },
     async getNote() {
@@ -129,7 +135,7 @@ async function createHarness(options: {
   uploadDirectory?: string;
   removeUploadFile?: (filePath: string) => Promise<void>;
 } = {}) {
-  const state: FakeClientState = { calls: [] };
+  const state = createFakeClientState();
   const events: DemoLogEvent[] = [];
   const logger: DemoLogger = {
     info: (event) => events.push(event),
@@ -290,6 +296,37 @@ test('maps all JSON workflow routes and rejects invalid IDs and bodies', async (
     400,
   );
   assert.equal((await fetch(`${harness.url}/api/streaming-token`, jsonRequest({ expiresIn: 59 }))).status, 400);
+  assert.equal(harness.state.calls.length, callsBeforeInvalid);
+});
+
+test('validates and forwards every stable note mode without cross-mode fields', async (t) => {
+  const harness = await createHarness();
+  t.after(harness.close);
+  const common = { transcript: 'Example', date: '2026-07-13', language: 'en' };
+  const noteTypes = [
+    { type: 'soap' },
+    { type: 'note_style', template: 'SOAP', includeJson: false },
+    {
+      type: 'note_template',
+      template: {
+        id: 'soap-template',
+        title: 'SOAP note',
+        sections: [{ type: 'heading', title: 'Assessment' }],
+      },
+    },
+  ];
+  for (const noteType of noteTypes) {
+    const response = await fetch(`${harness.url}/api/notes`, jsonRequest({ ...common, noteType }));
+    assert.equal(response.status, 200, await response.text());
+  }
+  assert.deepEqual(harness.state.noteInputs.map(({ noteType }) => noteType), noteTypes);
+
+  const callsBeforeInvalid = harness.state.calls.length;
+  const invalid = await fetch(
+    `${harness.url}/api/notes`,
+    jsonRequest({ ...common, noteType: { type: 'soap', template: 'not allowed' } }),
+  );
+  assert.equal(invalid.status, 400);
   assert.equal(harness.state.calls.length, callsBeforeInvalid);
 });
 
@@ -462,7 +499,7 @@ test('removes temporary upload after every upstream failure class', async () => 
     { code: 'UPSTREAM_TIMEOUT' as const, status: 504 },
   ];
   for (const scenario of scenarios) {
-    const state: FakeClientState = { calls: [] };
+    const state = createFakeClientState();
     const client = createFakeClient(state, {
       async createTranscription(_input, context) {
         throw new SullyApiError(scenario.code, context.requestId, 500);
@@ -488,7 +525,7 @@ test('removes temporary upload after every upstream failure class', async () => 
 });
 
 test('aborts upstream work and removes upload when browser disconnects', async (t) => {
-  const state: FakeClientState = { calls: [] };
+  const state = createFakeClientState();
   let markStarted: (() => void) | undefined;
   let markAborted: (() => void) | undefined;
   const started = new Promise<void>((resolve) => {
@@ -581,7 +618,7 @@ test('cleanup logger failure cannot replace successful upstream creation', async
 
 test('cleanup failure preserves primary upstream failure', async (t) => {
   const client = createFakeClient(
-    { calls: [] },
+    createFakeClientState(),
     {
       async createTranscription() {
         throw new SullyApiError('UPSTREAM_TIMEOUT', 'request-primary');
@@ -636,7 +673,7 @@ test('creates missing upload directory before concurrent first requests', async 
 });
 
 test('normalizes upstream failures and logs metadata without clinical data', async (t) => {
-  const state: FakeClientState = { calls: [] };
+  const state = createFakeClientState();
   const client = createFakeClient(state, {
     async createCoding(_input, context) {
       throw new SullyApiError('UPSTREAM_HTTP_ERROR', context.requestId, 429);

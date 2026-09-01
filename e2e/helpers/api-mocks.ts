@@ -44,6 +44,7 @@ export interface CapturedRequest {
 
 export async function installApiMocks(page: Page): Promise<CapturedRequest[]> {
   const requests: CapturedRequest[] = [];
+  let noteMode: string | undefined;
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -71,11 +72,25 @@ export async function installApiMocks(page: Page): Promise<CapturedRequest[]> {
       return;
     }
     if (url.pathname === '/api/notes' && request.method() === 'POST') {
+      if (
+        typeof body === 'object' &&
+        body !== null &&
+        'noteType' in body &&
+        typeof body.noteType === 'object' &&
+        body.noteType !== null &&
+        'type' in body.noteType &&
+        typeof body.noteType.type === 'string'
+      ) {
+        noteMode = body.noteType.type;
+      }
       await route.fulfill({ json: { status: 'ok', data: { noteId: 'note_demo' }, date: TIMESTAMP } });
       return;
     }
     if (url.pathname === '/api/notes/note_demo') {
-      await route.fulfill({ json: { status: 'ok', data: { id: 'note_demo', status: 'STATUS_DONE', payload: { markdown: '## Assessment\nMild asthma.' } }, date: TIMESTAMP } });
+      const payload = noteMode === 'note_template'
+        ? { json: { assessment: 'Mild asthma.' } }
+        : { markdown: '## Assessment\nMild asthma.' };
+      await route.fulfill({ json: { status: 'ok', data: { id: 'note_demo', status: 'STATUS_DONE', payload }, date: TIMESTAMP } });
       return;
     }
     if (url.pathname === '/api/codings' && request.method() === 'POST') {

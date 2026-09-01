@@ -17,8 +17,7 @@
     "test": "pnpm test:unit && pnpm test:integration",
     "test:e2e": "pnpm build && playwright test",
     "start": "pnpm build && node dist/server/server.js",
-    "start:note": "tsx sully-demo.ts note",
-    "start:stream": "tsx sully-demo.ts stream"
+    "start:stream": "tsx sully-stream-demo.ts"
   },
   "keywords": [],
   "author": "",

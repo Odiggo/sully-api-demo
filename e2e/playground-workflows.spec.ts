@@ -55,6 +55,71 @@ test('runs transcription, note handoff, note generation, and coding', async ({ p
   expect(requests[4]?.body).toEqual({ text: '## Assessment\nMild asthma.' });
 });
 
+test('generates notes with SOAP, inline style, and structured template modes', async ({ page }) => {
+  const requests = await installApiMocks(page);
+  await page.goto('/#notes');
+  await page.getByRole('textbox', { name: 'Transcript', exact: true }).fill('Clinical transcript');
+  await page.getByLabel('Encounter date').fill('2026-07-13');
+
+  const mode = page.getByLabel('Note mode');
+  const style = page.getByLabel('Note style');
+  const template = page.getByLabel('Note template (JSON object)');
+
+  await expect(style).toBeVisible();
+  await expect(template).toBeHidden();
+
+  await mode.selectOption('soap');
+  await expect(style).toBeHidden();
+  await expect(template).toBeHidden();
+  await page.getByRole('button', { name: 'Generate note' }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Note generation' })).toContainText('Mild asthma.');
+
+  await mode.selectOption('note_style');
+  await style.fill('Brief assessment and plan.');
+  await page.getByRole('button', { name: 'Generate note' }).click();
+
+  await mode.selectOption('note_template');
+  await expect(style).toBeHidden();
+  await expect(template).toBeVisible();
+  await template.fill(JSON.stringify({
+    id: 'assessment-template',
+    title: 'Assessment',
+    sections: [{ type: 'heading', title: 'Assessment' }],
+  }));
+  await page.getByRole('button', { name: 'Generate note' }).click();
+  await expect(page.locator('[data-result-view="notes"] [data-result-formatted]')).toContainText(
+    '"assessment": "Mild asthma."',
+  );
+
+  expect(requests.filter(({ path, method }) => path === '/api/notes' && method === 'POST').map(({ body }) => body)).toEqual([
+    {
+      transcript: 'Clinical transcript',
+      date: '2026-07-13',
+      language: 'en',
+      noteType: { type: 'soap' },
+    },
+    {
+      transcript: 'Clinical transcript',
+      date: '2026-07-13',
+      language: 'en',
+      noteType: { type: 'note_style', template: 'Brief assessment and plan.', includeJson: false },
+    },
+    {
+      transcript: 'Clinical transcript',
+      date: '2026-07-13',
+      language: 'en',
+      noteType: {
+        type: 'note_template',
+        template: {
+          id: 'assessment-template',
+          title: 'Assessment',
+          sections: [{ type: 'heading', title: 'Assessment' }],
+        },
+      },
+    },
+  ]);
+});
+
 test('leaving transcription aborts a pending sample without a hidden announcement', async ({ page }) => {
   let releaseSample: (() => void) | undefined;
   await page.route('**/samples/demo-audio.wav', async (route) => {

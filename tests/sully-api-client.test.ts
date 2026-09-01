@@ -8,7 +8,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import test from 'node:test';
 
-import nodeFetch, { Response } from 'node-fetch';
+import nodeFetch, { Headers, Response } from 'node-fetch';
 
 import {
   MAX_UPSTREAM_RESPONSE_BYTES,
@@ -162,6 +162,50 @@ test('uses every documented upstream method/path and attaches auth once', async 
     UPSTREAM_UPLOAD_REQUEST_TIMEOUT_MS,
     ...Array<number>(7).fill(UPSTREAM_JSON_REQUEST_TIMEOUT_MS),
   ]);
+});
+
+test('serializes every stable note mode exactly while keeping auth server-owned', async () => {
+  const bodies: unknown[] = [];
+  const headers: Headers[] = [];
+  const client = createSullyApiClient({
+    apiUrl: new URL('http://127.0.0.1:3001'),
+    apiKey: 'server-secret',
+    accountId: 'server-account',
+    fetch: async (_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      headers.push(new Headers(init?.headers));
+      return new Response(JSON.stringify(NOTE_CREATED));
+    },
+  });
+  const common = { transcript: 'Example', date: '2026-07-13', language: 'en' as const };
+  const requests = [
+    { ...common, noteType: { type: 'soap' as const } },
+    {
+      ...common,
+      noteType: { type: 'note_style' as const, template: 'SOAP', includeJson: false },
+    },
+    {
+      ...common,
+      noteType: {
+        type: 'note_template' as const,
+        template: {
+          id: 'soap-template',
+          title: 'SOAP note',
+          sections: [{ type: 'heading', title: 'Assessment' }],
+        },
+      },
+    },
+  ];
+  for (const request of requests) {
+    await client.createNote(request, { requestId: 'request-note-modes' });
+  }
+
+  assert.deepEqual(bodies, requests);
+  for (const header of headers) {
+    assert.equal(header.get('X-API-Key'), 'server-secret');
+    assert.equal(header.get('X-Account-ID'), 'server-account');
+  }
+  assert.equal(JSON.stringify(bodies).includes('server-secret'), false);
 });
 
 test('rejects redirects before custom credential headers can leave approved origin', async (t) => {
